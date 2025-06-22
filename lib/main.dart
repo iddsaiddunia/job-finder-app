@@ -43,7 +43,6 @@ class JobFinderApp extends StatelessWidget {
         '/job_finder/job_details': (context) => const JobDetailsScreen(),
         '/job_finder/application_status': (context) => ApplicationStatusScreen(),
         '/job_finder/register': (context) => const JobFinderRegisterScreen(),
-        '/job_finder_profile_setup': (context) => const JobFinderProfileScreen(),
         // Employer routes
         '/employer/home': (context) => EmployerHomeScreen(),
         '/employer/profile': (context) => const EmployerProfileScreen(),

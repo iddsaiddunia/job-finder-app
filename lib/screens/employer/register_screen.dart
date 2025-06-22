@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 
 class EmployerRegisterScreen extends StatefulWidget {
   const EmployerRegisterScreen({super.key});
@@ -61,12 +62,31 @@ class _EmployerRegisterScreenState extends State<EmployerRegisterScreen> {
               SizedBox(height: 24),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: 16)),
-                onPressed: () {
+                onPressed: () async {
                   if (_formKey.currentState!.validate()) {
-                    // Replace with API call
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Employer Registered!')),
+                    FocusScope.of(context).unfocus();
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => Center(child: CircularProgressIndicator()),
                     );
+                    try {
+                      await AuthService().registerRecruiter(
+                        email: _emailController.text.trim(),
+                        password: _passwordController.text,
+                        companyName: _companyNameController.text.trim(),
+                      );
+                      Navigator.of(context).pop(); // Close loading dialog
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Employer Registered! Please log in.')),
+                      );
+                      Navigator.pushReplacementNamed(context, '/login');
+                    } catch (e) {
+                      Navigator.of(context).pop(); // Close loading dialog
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+                      );
+                    }
                   }
                 },
                 child: Text('Register'),

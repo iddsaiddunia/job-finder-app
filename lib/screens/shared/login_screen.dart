@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/fake_auth_service.dart';
+import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,29 +16,29 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-    final result = FakeAuthService().login(email, password);
-    await Future.delayed(Duration(milliseconds: 500)); // simulate network
-    if (!mounted) return;
-    setState(() => _loading = false);
-    if (result.user != null) {
-      final isComplete = FakeAuthService().isProfileComplete(email);
-      if (result.user!.type == UserType.jobFinder) {
-        if (!isComplete) {
-          Navigator.pushReplacementNamed(context, '/job_finder_profile_setup', arguments: email);
-        } else {
-          Navigator.pushReplacementNamed(context, '/job_finder/home');
-        }
+    try {
+      final result = await AuthService().login(email: email, password: password);
+      if (!mounted) return;
+      setState(() => _loading = false);
+      final userType = result['user_type'];
+      if (userType == 'seeker') {
+        Navigator.pushReplacementNamed(context, '/job_finder/home');
+      } else if (userType == 'recruiter') {
+        Navigator.pushReplacementNamed(context, '/employer/home');
       } else {
-        if (!isComplete) {
-          Navigator.pushReplacementNamed(context, '/employer_profile_setup', arguments: email);
-        } else {
-          Navigator.pushReplacementNamed(context, '/employer/home');
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unknown user type')),
+        );
       }
-    } else {
+    } catch (e) {
+      print(e);
+      if (!mounted) return;
+      setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.error ?? 'Login failed')),
+        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
       );
+
+      
     }
   }
 

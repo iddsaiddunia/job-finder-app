@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../services/fake_auth_service.dart';
+import 'package:job_finder/screens/job_finder/profile_screen.dart';
+import '../../services/auth_service.dart';
+import '../../services/job_service.dart';
+import '../../services/user_service.dart';
+import '../../services/token_storage.dart';
 
 class JobFinderHomeScreen extends StatefulWidget {
   const JobFinderHomeScreen({super.key});
@@ -14,7 +18,7 @@ class _JobFinderHomeScreenState extends State<JobFinderHomeScreen> {
     _DashboardView(),
     _JobListingsView(),
     _ApplicationStatusView(),
-    _ProfileView(),
+    JobFinderProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -71,121 +75,594 @@ class _JobFinderHomeScreenState extends State<JobFinderHomeScreen> {
 }
 
 // Dashboard View
-class _DashboardView extends StatelessWidget {
+class _DashboardView extends StatefulWidget {
   const _DashboardView();
 
   @override
-  Widget build(BuildContext context) {
-    final String userName = 'Jane'; // Placeholder, replace with real user data
-    final List<Map<String, String>> recommendedJobs = [
-      {
-        'title': 'Flutter Developer',
-        'company': 'TechCorp',
-        'location': 'Remote',
-        'skills': 'Flutter, Dart',
-        'salary': '2,000/mo',
-      },
-      {
-        'title': 'Backend Engineer',
-        'company': 'DataSoft',
-        'location': 'Nairobi',
-        'skills': 'Django, PostgreSQL',
-        'salary': '3,000/mo',
-      },
-    ];
-
-    return ListView(
-      padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-      children: [
-        // Greeting
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: Colors.deepPurple[100],
-              child: Icon(Icons.person, color: Colors.deepPurple, size: 32),
-            ),
-            SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Welcome back,', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
-                Text(userName, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ],
-        ),
-        SizedBox(height: 24),
-        // Quick Stats
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _StatCard(icon: Icons.work_outline, label: 'Applied', value: '5'),
-            _StatCard(icon: Icons.star_outline, label: 'Matches', value: '2'),
-            _StatCard(icon: Icons.check_circle_outline, label: 'Interviews', value: '1'),
-          ],
-        ),
-        SizedBox(height: 28),
-        // Recommended Jobs Section
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Recommended Jobs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            TextButton(
-              onPressed: () {},
-              child: Text('See all'),
-            ),
-          ],
-        ),
-        ...recommendedJobs.map((job) => Card(
-              margin: EdgeInsets.symmetric(vertical: 8),
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: CircleAvatar(child: Icon(Icons.work), backgroundColor: Colors.deepPurple[50]),
-                title: Text(job['title']!, style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${job['company']} • ${job['location']}\n${job['skills']}'),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(job['salary']!, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700])),
-                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
-                  ],
-                ),
-                onTap: () => Navigator.pushNamed(context, '/job_finder/job_details'),
-              ),
-            )),
-      ],
-    );
-  }
+  State<_DashboardView> createState() => _DashboardViewState();
 }
 
-class _StatCard extends StatelessWidget {
+// Compact Stat Card Widget
+class _CompactStatCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _StatCard({required this.icon, required this.label, required this.value});
+  final Color color;
+
+  const _CompactStatCard({required this.icon, required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 1,
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Container(
-        width: 90,
-        padding: EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.deepPurple, size: 28),
-            SizedBox(height: 8),
-            Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            SizedBox(height: 4),
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 8),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 4),
             Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
           ],
         ),
       ),
     );
+  }
+}
+
+class _DashboardViewState extends State<_DashboardView> {
+  String userName = 'User';
+  Map<String, dynamic> dashboardStats = {};
+  List<Map<String, dynamic>> recommendedJobs = [];
+  bool isLoading = true;
+  String? error;
+  bool profileUpdated = true; // Track profile status
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboardData();
+  }
+
+  Future<void> _loadDashboardData() async {
+    try {
+      setState(() {
+        isLoading = true;
+        error = null;
+      });
+
+      // Load user data
+      final loginData = await TokenStorage.getLoginData();
+      final userEmail = loginData['email'] ?? 'User';
+      String displayName = userEmail.split('@')[0]; // Default to username part of email
+      bool isProfileUpdated = false;
+      
+      // Try to get user profile for full name and profile status
+      try {
+        // Try job seeker profile first
+        try {
+          final seekerProfile = await UserService().getJobSeekerProfile();
+          displayName = seekerProfile['full_name'] ?? displayName;
+          isProfileUpdated = seekerProfile['profile_updated'] ?? false;
+        } catch (e) {
+          // If not a job seeker, try recruiter profile
+          try {
+            final recruiterProfile = await UserService().getRecruiterProfile();
+            displayName = recruiterProfile['company_name'] ?? displayName;
+            isProfileUpdated = recruiterProfile['profile_updated'] ?? false;
+          } catch (e) {
+            // Not a recruiter either, keep default name
+          }
+        }
+        
+        setState(() {
+          userName = displayName;
+          profileUpdated = isProfileUpdated;
+        });
+        
+        // Show profile update alert if profile is not updated
+        if (!isProfileUpdated && mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showProfileUpdateAlert();
+          });
+        }
+      } catch (e) {
+        setState(() {
+          userName = displayName;
+          profileUpdated = false; // Assume profile needs update if we can't verify
+        });
+      }
+
+      // Load dashboard stats and recommended jobs in parallel
+      final results = await Future.wait([
+        JobService().getDashboardStats().catchError((e) => <String, dynamic>{}),
+        JobService().getRecommendedJobs().catchError((e) => <Map<String, dynamic>>[]),
+      ]);
+
+      setState(() {
+        dashboardStats = results[0] as Map<String, dynamic>;
+        recommendedJobs = results[1] as List<Map<String, dynamic>>;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        error = e.toString().replaceAll('Exception: ', '');
+        isLoading = false;
+      });
+    }
+  }
+
+  void _showProfileUpdateAlert() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Update Your Profile'),
+        content: const Text('Please update your profile to get better job recommendations.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pushNamed(context, '/job_finder/profile'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+            child: const Text('Update Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text('Failed to load dashboard', style: TextStyle(fontSize: 18, color: Colors.grey[600])),
+            const SizedBox(height: 8),
+            Text(error!, style: TextStyle(color: Colors.grey[500]), textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _loadDashboardData, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadDashboardData,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        children: [
+          // Greeting
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.deepPurple[100],
+                child: Icon(Icons.person, color: Colors.deepPurple, size: 32),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Welcome back,', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
+                    Text(userName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          
+          // Profile Update Banner (show only if profile not updated)
+          if (!profileUpdated)
+            Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange[700], size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Complete Your Profile',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[800],
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Update your profile to get better job recommendations',
+                          style: TextStyle(color: Colors.orange[700], fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pushNamed(context, '/job_finder/profile'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.orange[100],
+                      foregroundColor: Colors.orange[800],
+                    ),
+                    child: const Text('Update'),
+                  ),
+                ],
+              ),
+            ),
+          
+          // Quick Stats
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Your Statistics',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CompactStatCard(
+                        icon: Icons.work_outline,
+                        label: 'Applied',
+                        value: (dashboardStats['applications_count'] ?? 0).toString(),
+                        color: Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CompactStatCard(
+                        icon: Icons.star_outline,
+                        label: 'Matches',
+                        value: (dashboardStats['matches_count'] ?? 0).toString(),
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CompactStatCard(
+                        icon: Icons.check_circle_outline,
+                        label: 'Interviews',
+                        value: (dashboardStats['interviews_count'] ?? 0).toString(),
+                        color: Colors.green,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CompactStatCard(
+                        icon: Icons.business_center,
+                        label: 'Direct Hires',
+                        value: (dashboardStats['direct_hires_count'] ?? 0).toString(),
+                        color: Colors.purple,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          // Recommended Jobs Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Recommended Jobs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              TextButton(
+                onPressed: () {
+                  if (context.findAncestorStateOfType<_JobFinderHomeScreenState>() != null) {
+                    context.findAncestorStateOfType<_JobFinderHomeScreenState>()!._onItemTapped(1);
+                  }
+                },
+                child: const Text('See all'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Recommended Jobs List
+          if (recommendedJobs.isEmpty)
+            Card(
+              elevation: 0,
+              color: Colors.grey[50],
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Icon(Icons.work_outline, size: 48, color: Colors.grey[400]),
+                    const SizedBox(height: 12),
+                    Text('No recommended jobs yet', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                    const SizedBox(height: 8),
+                    Text('Complete your profile to get better job recommendations', style: TextStyle(color: Colors.grey[500]), textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...recommendedJobs.map((job) => _JobCard(job: job)).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+// Job Card Widget for recommended jobs
+class _JobCard extends StatelessWidget {
+  final Map<String, dynamic> job;
+
+  const _JobCard({required this.job});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.work, color: Colors.deepPurple, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        job['title'] ?? 'Job Title',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        job['company_name'] ?? job['company'] ?? 'Company',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              job['location'] ?? 'Location',
+                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (job['salary_range'] != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.attach_money, size: 14, color: Colors.green[600]),
+                            const SizedBox(width: 4),
+                            Text(
+                              job['salary_range'],
+                              style: TextStyle(color: Colors.green[600], fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.bookmark_border, color: Colors.grey[400]),
+                  onPressed: () async {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Save job feature coming soon!'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (job['job_type'] != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      job['job_type'],
+                      style: TextStyle(color: Colors.blue[700], fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => _showJobDetails(context, job),
+                  child: const Text('View Details'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showJobDetails(BuildContext context, Map<String, dynamic> job) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (context, scrollController) => _JobDetailsSheet(
+          job: job,
+          scrollController: scrollController,
+        ),
+      ),
+    );
+  }
+}
+
+// Job Details Sheet
+class _JobDetailsSheet extends StatelessWidget {
+  final Map<String, dynamic> job;
+  final ScrollController scrollController;
+
+  const _JobDetailsSheet({required this.job, required this.scrollController});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView(
+              controller: scrollController,
+              children: [
+                Text(
+                  job['title'] ?? 'Job Title',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  job['company_name'] ?? job['company'] ?? 'Company',
+                  style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(Icons.location_on, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
+                    Text(job['location'] ?? 'Location'),
+                  ],
+                ),
+                if (job['salary_range'] != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.attach_money, color: Colors.green[600]),
+                      const SizedBox(width: 8),
+                      Text(job['salary_range'], style: TextStyle(color: Colors.green[600], fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 20),
+                if (job['description'] != null) ...[
+                  const Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(job['description']),
+                  const SizedBox(height: 20),
+                ],
+                if (job['requirements'] != null) ...[
+                  const Text('Requirements', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(job['requirements']),
+                  const SizedBox(height: 20),
+                ],
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+          // Apply button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => _applyForJob(context, job),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Apply Now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyForJob(BuildContext context, Map<String, dynamic> job) async {
+    try {
+      await JobService().applyForJob(jobId: job['id']);
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Application submitted successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to apply: ${e.toString().replaceAll('Exception: ', '')}')),
+      );
+    }
   }
 }
 
@@ -197,12 +674,20 @@ class _JobListingsView extends StatefulWidget {
   State<_JobListingsView> createState() => _JobListingsViewState();
 }
 
-class _JobListingsViewState extends State<_JobListingsView> {
+class _JobListingsViewState extends State<_JobListingsView> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   String _selectedType = 'All';
   String _selectedDuration = 'Any';
+  TabController? _tabController;
+  
+  // Data states
+  List<Map<String, dynamic>> allJobs = [];
+  List<Map<String, dynamic>> recommendedJobs = [];
+  bool isLoading = true;
+  String? error;
 
-  final List<Map<String, String>> jobs = [
+  // Sample data for fallback
+  final List<Map<String, String>> sampleJobs = [
       {
         'title': 'Flutter Developer',
         'company': 'TechCorp',
@@ -229,20 +714,191 @@ class _JobListingsViewState extends State<_JobListingsView> {
       },
     ];
 
-    final List<String> durations = ['Any', '1 month', '3 months', '6 months', '1 year'];
-    final List<String> types = ['All', 'Contract', 'Short Term'];
+  final List<String> durations = ['Any', '1 month', '3 months', '6 months', '1 year'];
+  final List<String> types = ['All', 'Contract', 'Short Term'];
+  
+  @override
+  void initState() {
+    super.initState();
+    // Initialize the TabController with the correct vsync and length
+    _tabController = TabController(length: 2, vsync: this);
+    _loadJobs();
+  }
+  
+  @override
+  void dispose() {
+    _tabController?.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+  
+  Future<void> _loadJobs() async {
+    setState(() {
+      isLoading = true;
+      error = null;
+    });
+    
+    try {
+      // Load both regular and recommended jobs in parallel
+      final results = await Future.wait([
+        JobService().getJobs().catchError((e) => <Map<String, dynamic>>[]),
+        JobService().getRecommendedJobs().catchError((e) => <Map<String, dynamic>>[]),
+      ]);
+      
+      setState(() {
+        allJobs = results[0];
+        recommendedJobs = results[1];
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        // Fallback to sample data if API fails
+        allJobs = List<Map<String, dynamic>>.from(sampleJobs);
+        recommendedJobs = [];
+        error = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  // Filter jobs based on search and filter criteria
+  List<Map<String, dynamic>> _filterJobs(List<Map<String, dynamic>> jobsList) {
+    return jobsList.where((job) {
+      final matchesSearch = _searchController.text.isEmpty ||
+          job['title'].toString().toLowerCase().contains(_searchController.text.toLowerCase()) ||
+          job['company'].toString().toLowerCase().contains(_searchController.text.toLowerCase());
+      final matchesType = _selectedType == 'All' || job['type'].toString() == _selectedType;
+      final matchesDuration = _selectedDuration == 'Any' || job['duration'].toString() == _selectedDuration;
+      return matchesSearch && matchesType && matchesDuration;
+    }).toList();
+  }
+  
+  // Job card widget for displaying job listings
+  Widget _buildJobCard(Map<String, dynamic> job, BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 7, horizontal: screenWidth < 400 ? 0 : 2),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 10, horizontal: screenWidth < 400 ? 10 : 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.deepPurple[50],
+                  child: Icon(Icons.business, color: Colors.deepPurple, size: 20),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              job['title'].toString(),
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: job['type'].toString() == 'Contract'
+                                  ? Color(0xFFEDE7F6) // light purple
+                                  : Color(0xFFFFF3E0), // light orange
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            child: Text(
+                              job['type'].toString(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: job['type'].toString() == 'Contract'
+                                    ? Colors.deepPurple
+                                    : Colors.deepOrange,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 2),
+                      Text(job['duration'].toString(), 
+                           style: TextStyle(fontSize: 11.5, color: Colors.blueGrey), 
+                           maxLines: 1, 
+                           overflow: TextOverflow.ellipsis),
+                      SizedBox(height: 2),
+                      Text(job['company'].toString(), 
+                           style: TextStyle(fontSize: 13, color: Colors.grey[700]), 
+                           maxLines: 1, 
+                           overflow: TextOverflow.ellipsis),
+                      SizedBox(height: 1),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, size: 13, color: Colors.deepPurple[200]),
+                          SizedBox(width: 2),
+                          Flexible(
+                            child: Text(job['location'].toString(), 
+                                     style: TextStyle(fontSize: 11.5, color: Colors.grey[600]), 
+                                     maxLines: 1, 
+                                     overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    job['salary'].toString(),
+                    style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w600, fontSize: 12),
+                  ),
+                ),
+                Spacer(),
+                SizedBox(
+                  height: 28,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.deepPurple),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                    ),
+                    onPressed: () => Navigator.pushNamed(context, '/job_finder/job_details'),
+                    child: Text('View', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Filtering logic in build
-    List<Map<String, String>> filteredJobs = jobs.where((job) {
-      final matchesSearch = _searchController.text.isEmpty ||
-          job['title']!.toLowerCase().contains(_searchController.text.toLowerCase()) ||
-          job['company']!.toLowerCase().contains(_searchController.text.toLowerCase());
-      final matchesType = _selectedType == 'All' || job['type'] == _selectedType;
-      final matchesDuration = _selectedDuration == 'Any' || job['duration'] == _selectedDuration;
-      return matchesSearch && matchesType && matchesDuration;
-    }).toList();
+    // Apply filtering to both job lists
+    final filteredAllJobs = _filterJobs(allJobs);
+    final filteredRecommendedJobs = _filterJobs(recommendedJobs);
 
     return Column(
       children: [
@@ -325,6 +981,7 @@ class _JobListingsViewState extends State<_JobListingsView> {
             ],
           ),
         ),
+        
         // Active filter chips
         if (_selectedType != 'All' || _selectedDuration != 'Any')
           Padding(
@@ -345,123 +1002,93 @@ class _JobListingsViewState extends State<_JobListingsView> {
               ],
             ),
           ),
-        Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: filteredJobs.length,
-            itemBuilder: (context, index) {
-              final job = filteredJobs[index];
-              final screenWidth = MediaQuery.of(context).size.width;
-              return Card(
-                margin: EdgeInsets.symmetric(vertical: 7, horizontal: screenWidth < 400 ? 0 : 2),
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10, horizontal: screenWidth < 400 ? 10 : 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundColor: Colors.deepPurple[50],
-                            child: Icon(Icons.business, color: Colors.deepPurple, size: 20),
-                          ),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        job['title']!,
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    SizedBox(width: 6),
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: job['type'] == 'Contract'
-                                            ? Color(0xFFEDE7F6) // light purple
-                                            : Color(0xFFFFF3E0), // light orange
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      child: Text(
-                                        job['type']!,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                          color: job['type'] == 'Contract'
-                                              ? Colors.deepPurple
-                                              : Colors.deepOrange,
-                                          letterSpacing: 0.2,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 2),
-                                Text(job['duration']!, style: TextStyle(fontSize: 11.5, color: Colors.blueGrey), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                SizedBox(height: 2),
-                                Text(job['company']!, style: TextStyle(fontSize: 13, color: Colors.grey[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                SizedBox(height: 1),
-                                Row(
-                                  children: [
-                                    Icon(Icons.location_on, size: 13, color: Colors.deepPurple[200]),
-                                    SizedBox(width: 2),
-                                    Flexible(
-                                      child: Text(job['location']!, style: TextStyle(fontSize: 11.5, color: Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green[50],
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              job['salary']!,
-                              style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w600, fontSize: 12),
-                            ),
-                          ),
-                          Spacer(),
-                          SizedBox(
-                            height: 28,
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.deepPurple),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                padding: EdgeInsets.symmetric(horizontal: 10),
-                              ),
-                              onPressed: () => Navigator.pushNamed(context, '/job_finder/job_details'),
-                              child: Text('View', style: TextStyle(fontSize: 12)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+          
+        // Tab bar for All Jobs and Recommended Jobs
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TabBar(
+            controller: _tabController!,
+            labelColor: Colors.deepPurple,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Colors.deepPurple,
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: [
+              Tab(text: 'All Jobs'),
+              Tab(text: 'Recommended'),
+            ],
           ),
         ),
+        
+        // Loading indicator
+        if (isLoading)
+          Expanded(
+            child: Center(
+              child: CircularProgressIndicator(color: Colors.deepPurple),
+            ),
+          )
+        else if (error != null)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  SizedBox(height: 16),
+                  Text('Failed to load jobs', style: TextStyle(fontSize: 16)),
+                  SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _loadJobs,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+                    child: Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          // Tab content
+          Expanded(
+            child: TabBarView(
+              controller: _tabController!,
+              children: [
+                // All Jobs Tab
+                filteredAllJobs.isEmpty
+                  ? Center(child: Text('No jobs match your filters'))
+                  : ListView.builder(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: filteredAllJobs.length,
+                      itemBuilder: (context, index) => _buildJobCard(filteredAllJobs[index], context),
+                    ),
+                    
+                // Recommended Jobs Tab
+                filteredRecommendedJobs.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.recommend, color: Colors.grey[400], size: 48),
+                          SizedBox(height: 16),
+                          Text(
+                            'No recommended jobs yet',
+                            style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Complete your profile to get personalized recommendations',
+                            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: filteredRecommendedJobs.length,
+                      itemBuilder: (context, index) => _buildJobCard(filteredRecommendedJobs[index], context),
+                    ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -594,6 +1221,23 @@ class _ProfileView extends StatefulWidget {
 
 class _ProfileViewState extends State<_ProfileView> {
   bool _isAvailable = true;
+
+  void _logout() async {
+    try {
+      final success = await AuthService().logout();
+      if (success) {
+        Navigator.pushReplacementNamed(context, '/login');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Logout failed. Please try again.')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -897,28 +1541,18 @@ class _ProfileViewState extends State<_ProfileView> {
                   builder: (context, skillList, _) => Wrap(
                     spacing: 8,
                     runSpacing: 4,
-                    children: [
-                      ...skillList.map((skill) => Chip(
-                        label: Text(skill, style: const TextStyle(fontSize: 12)),
-                        backgroundColor: Colors.deepPurple[50],
-                        labelStyle: const TextStyle(color: Colors.deepPurple),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        visualDensity: VisualDensity.compact,
-                        deleteIcon: const Icon(Icons.close, size: 17),
-                        onDeleted: () {
-                          final updated = [...skillList]..remove(skill);
-                          skills.value = updated;
-                        },
-                      )),
-                      ActionChip(
-                        label: const Text('Add Skill', style: TextStyle(color: Colors.deepPurple)),
-                        avatar: const Icon(Icons.add, color: Colors.deepPurple, size: 18),
-                        backgroundColor: Colors.deepPurple[50],
-                        onPressed: () => _showAddSkillDialog(context),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
+                    children: skillList.map<Widget>((skill) => Chip(
+                      label: Text(skill, style: const TextStyle(fontSize: 12)),
+                      backgroundColor: Colors.deepPurple[50],
+                      labelStyle: const TextStyle(color: Colors.deepPurple),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      visualDensity: VisualDensity.compact,
+                      deleteIcon: const Icon(Icons.close, size: 17),
+                      onDeleted: () {
+                        final updated = [...skillList]..remove(skill);
+                        skills.value = updated;
+                      },
+                    )).toList(),
                   ),
                 ),
               ],
@@ -931,67 +1565,65 @@ class _ProfileViewState extends State<_ProfileView> {
         ValueListenableBuilder<List<Map<String, String>>>(
           valueListenable: experiences,
           builder: (context, expList, _) => Column(
-            children: [
-              ...expList.asMap().entries.map((entry) {
-                final idx = entry.key;
-                final exp = entry.value;
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 14),
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(exp['title']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                              const SizedBox(height: 2),
-                              Text(exp['company']!, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                              const SizedBox(height: 2),
-                              Text(exp['duration']!, style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
-                              const SizedBox(height: 6),
-                              Text(exp['desc']!, style: TextStyle(fontSize: 13)),
-                            ],
-                          ),
-                        ),
-                        Column(
+            children: expList.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final exp = entry.value;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 14),
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.deepPurple, size: 20),
-                              tooltip: 'Edit',
-                              onPressed: () => _showAddOrEditExperienceSheet(context, exp: exp, idx: idx),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                              tooltip: 'Delete',
-                              onPressed: () {
-                                final updated = [...expList]..removeAt(idx);
-                                experiences.value = updated;
-                              },
-                            ),
+                            Text(exp['title']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(height: 2),
+                            Text(exp['company']!, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                            const SizedBox(height: 2),
+                            Text(exp['duration']!, style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                            const SizedBox(height: 6),
+                            Text(exp['desc']!, style: TextStyle(fontSize: 13)),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                      Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.deepPurple, size: 20),
+                            tooltip: 'Edit',
+                            onPressed: () => _showAddOrEditExperienceSheet(context, exp: exp, idx: idx),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                            tooltip: 'Delete',
+                            onPressed: () {
+                              final updated = [...expList]..removeAt(idx);
+                              experiences.value = updated;
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                );
-              }).toList(),
-              OutlinedButton.icon(
-                onPressed: () => _showAddOrEditExperienceSheet(context),
-                icon: const Icon(Icons.add, color: Colors.deepPurple),
-                label: const Text('Add Experience', style: TextStyle(color: Colors.deepPurple)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.deepPurple),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
                 ),
-              ),
-            ],
+              );
+            }).toList(),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => _showAddOrEditExperienceSheet(context),
+          icon: const Icon(Icons.add, color: Colors.deepPurple),
+          label: const Text('Add Experience', style: TextStyle(color: Colors.deepPurple)),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Colors.deepPurple),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
           ),
         ),
         const SizedBox(height: 30),
@@ -1006,14 +1638,13 @@ class _ProfileViewState extends State<_ProfileView> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            onPressed: () {},
+            onPressed: _logout,
           ),
         ),
       ],
     );
   }
 }
-
 
 // Notifications View
 class _NotificationsView extends StatelessWidget {

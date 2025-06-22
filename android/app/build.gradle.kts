@@ -6,10 +6,9 @@ plugins {
 }
 
 android {
-    ndkVersion = "27.0.12077973"
     namespace = "com.example.job_finder"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.13599879" // Use the newest available NDK version
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

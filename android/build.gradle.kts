@@ -12,9 +12,8 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
-subprojects {
-    project.evaluationDependsOn(":app")
-}
+// Configuration for subprojects if needed
+// Removed evaluationDependsOn that was causing NDK issues
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

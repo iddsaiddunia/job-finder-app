@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/fake_auth_service.dart';
+import '../../services/auth_service.dart';
 
 
 class _UnifiedRegisterForm extends StatefulWidget {
@@ -16,28 +16,40 @@ class _UnifiedRegisterFormState extends State<_UnifiedRegisterForm> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  void _register() {
+  void _register() async {
     if (_formKey.currentState!.validate()) {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
-      final userType = _accountType == 'job_finder' ? UserType.jobFinder : UserType.employer;
       final name = _nameController.text.trim();
       final company = _companyController.text.trim();
-      final result = FakeAuthService().register(
-        email: email,
-        password: password,
-        type: userType,
-        name: userType == UserType.jobFinder ? name : null,
-        company: userType == UserType.employer ? company : null,
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
       );
-      if (result.success) {
+      try {
+        if (_accountType == 'job_finder') {
+          await AuthService().registerSeeker(
+            email: email,
+            password: password,
+            fullName: name,
+          );
+        } else {
+          await AuthService().registerRecruiter(
+            email: email,
+            password: password,
+            companyName: company,
+          );
+        }
+        Navigator.of(context).pop(); // Close loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Registration successful! Please login.')),
         );
         Navigator.pop(context);
-      } else {
+      } catch (e) {
+        Navigator.of(context).pop(); // Close loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.error ?? 'Registration failed')),
+          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
         );
       }
     }
