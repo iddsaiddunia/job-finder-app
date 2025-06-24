@@ -564,9 +564,26 @@ class _JobDetailsSheet extends StatelessWidget {
   final ScrollController scrollController;
 
   const _JobDetailsSheet({required this.job, required this.scrollController});
+  
+  // Helper method to safely extract job data
+  String _safeGet(String key, String defaultValue) {
+    final value = job[key];
+    if (value == null) return defaultValue;
+    return value.toString();
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Extract job data with null safety
+    final String title = _safeGet('title', 'Job Title');
+    final String company = job['company_name']?.toString() ?? job['company']?.toString() ?? 'Company';
+    final String location = _safeGet('location', 'Remote');
+    final String salary = job['salary_range']?.toString() ?? job['salary']?.toString() ?? 'Negotiable';
+    final String type = _safeGet('type', 'Full-time');
+    final String duration = _safeGet('duration', 'Not specified');
+    final String description = _safeGet('description', 'No description available');
+    final String requirements = _safeGet('requirements', 'No specific requirements listed');
+    
     return Container(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -589,12 +606,12 @@ class _JobDetailsSheet extends StatelessWidget {
               controller: scrollController,
               children: [
                 Text(
-                  job['title'] ?? 'Job Title',
+                  title,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  job['company_name'] ?? job['company'] ?? 'Company',
+                  company,
                   style: TextStyle(fontSize: 18, color: Colors.grey[700]),
                 ),
                 const SizedBox(height: 16),
@@ -602,32 +619,37 @@ class _JobDetailsSheet extends StatelessWidget {
                   children: [
                     Icon(Icons.location_on, color: Colors.grey[600]),
                     const SizedBox(width: 8),
-                    Text(job['location'] ?? 'Location'),
+                    Expanded(child: Text(location)),
                   ],
                 ),
-                if (job['salary_range'] != null) ...[
-                  const SizedBox(height: 8),
+                const SizedBox(height: 8),
                   Row(
-                    children: [
-                      Icon(Icons.attach_money, color: Colors.green[600]),
-                      const SizedBox(width: 8),
-                      Text(job['salary_range'], style: TextStyle(color: Colors.green[600], fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                ],
+                  children: [
+                    Icon(Icons.attach_money, color: Colors.green[600]),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(salary, style: TextStyle(color: Colors.green[600], fontWeight: FontWeight.w500))),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.work_outline, color: Colors.blue[400]),
+                    const SizedBox(width: 8),
+                    Text(type, style: TextStyle(color: Colors.blue[700])),
+                    const SizedBox(width: 16),
+                    Icon(Icons.access_time, color: Colors.orange[400], size: 18),
+                    const SizedBox(width: 8),
+                    Text(duration, style: TextStyle(color: Colors.orange[700])),
+                  ],
+                ),
                 const SizedBox(height: 20),
-                if (job['description'] != null) ...[
-                  const Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(job['description']),
-                  const SizedBox(height: 20),
-                ],
-                if (job['requirements'] != null) ...[
-                  const Text('Requirements', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(job['requirements']),
-                  const SizedBox(height: 20),
-                ],
+                const Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text(description),
+                const SizedBox(height: 20),
+                const Text('Requirements', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text(requirements),
                 const SizedBox(height: 40),
               ],
             ),
@@ -685,6 +707,7 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
   List<Map<String, dynamic>> recommendedJobs = [];
   bool isLoading = true;
   String? error;
+  List<Map<String, dynamic>> _userApplications = []; // Store user's applications
 
   // Sample data for fallback
   final List<Map<String, String>> sampleJobs = [
@@ -723,6 +746,23 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
     // Initialize the TabController with the correct vsync and length
     _tabController = TabController(length: 2, vsync: this);
     _loadJobs();
+    _loadUserApplications();
+  }
+  
+  // Load user's applications to track which jobs they've applied to
+  Future<void> _loadUserApplications() async {
+    try {
+      final applications = await JobService().getApplications();
+      if (mounted) {
+        setState(() {
+          _userApplications = applications;
+        });
+      }
+      print('Fetched ${applications.length} user applications');
+    } catch (e) {
+      print('Error fetching user applications: $e');
+      // Don't update state or show error - this is a background operation
+    }
   }
   
   @override
@@ -776,6 +816,43 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
   // Job card widget for displaying job listings
   Widget _buildJobCard(Map<String, dynamic> job, BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Extract job data with null safety based on backend model
+    final String title = job['title']?.toString() ?? 'Untitled Position';
+    final String type = job['job_type']?.toString() ?? 'Full-time';
+    final String company = job['company_name']?.toString() ?? job['recruiter']?['company_name']?.toString() ?? 'Company';
+    final String location = job['location']?.toString() ?? 'Remote';
+    final bool isRemote = job['is_remote'] == true;
+    final String displayLocation = isRemote ? 'Remote' : location;
+    
+    // Format salary range
+    final dynamic salaryMin = job['salary_min'];
+    final dynamic salaryMax = job['salary_max'];
+    String salary = 'Negotiable';
+    if (salaryMin != null && salaryMax != null) {
+      salary = '\$${salaryMin.toString()} - \$${salaryMax.toString()}';
+    }
+    
+    // Get experience level for duration display
+    final String experienceLevel = job['experience_level']?.toString() ?? '';
+    
+    // Check if this job is in the user's applications
+    final int? jobId = job['id'];
+    bool hasApplied = false;
+    if (jobId != null && _userApplications.isNotEmpty) {
+      hasApplied = _userApplications.any((application) {
+        // Handle different job response formats
+        if (application['job'] is Map) {
+          // Job is a nested object with id field
+          return application['job']['id'] == jobId;
+        } else if (application['job'] is int) {
+          // Job is just the ID
+          return application['job'] == jobId;
+        }
+        return false;
+      });
+    }
+    
     return Card(
       margin: EdgeInsets.symmetric(vertical: 7, horizontal: screenWidth < 400 ? 0 : 2),
       elevation: 2,
@@ -802,7 +879,7 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
                         children: [
                           Flexible(
                             child: Text(
-                              job['title'].toString(),
+                              title,
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -811,18 +888,18 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
                           SizedBox(width: 6),
                           Container(
                             decoration: BoxDecoration(
-                              color: job['type'].toString() == 'Contract'
+                              color: type == 'Contract'
                                   ? Color(0xFFEDE7F6) // light purple
                                   : Color(0xFFFFF3E0), // light orange
                               borderRadius: BorderRadius.circular(6),
                             ),
                             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             child: Text(
-                              job['type'].toString(),
+                              type,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
-                                color: job['type'].toString() == 'Contract'
+                                color: type == 'Contract'
                                     ? Colors.deepPurple
                                     : Colors.deepOrange,
                                 letterSpacing: 0.2,
@@ -832,12 +909,12 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
                         ],
                       ),
                       SizedBox(height: 2),
-                      Text(job['duration'].toString(), 
+                      Text(experienceLevel, 
                            style: TextStyle(fontSize: 11.5, color: Colors.blueGrey), 
                            maxLines: 1, 
                            overflow: TextOverflow.ellipsis),
                       SizedBox(height: 2),
-                      Text(job['company'].toString(), 
+                      Text(company, 
                            style: TextStyle(fontSize: 13, color: Colors.grey[700]), 
                            maxLines: 1, 
                            overflow: TextOverflow.ellipsis),
@@ -847,7 +924,7 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
                           Icon(Icons.location_on, size: 13, color: Colors.deepPurple[200]),
                           SizedBox(width: 2),
                           Flexible(
-                            child: Text(job['location'].toString(), 
+                            child: Text(displayLocation, 
                                      style: TextStyle(fontSize: 11.5, color: Colors.grey[600]), 
                                      maxLines: 1, 
                                      overflow: TextOverflow.ellipsis),
@@ -869,10 +946,31 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    job['salary'].toString(),
+                    salary,
                     style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                 ),
+                if (hasApplied)
+                  Container(
+                    margin: EdgeInsets.only(left: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.blue, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Applied',
+                          style: TextStyle(color: Colors.blue[700], fontWeight: FontWeight.w600, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
                 Spacer(),
                 SizedBox(
                   height: 28,
@@ -882,7 +980,11 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: EdgeInsets.symmetric(horizontal: 10),
                     ),
-                    onPressed: () => Navigator.pushNamed(context, '/job_finder/job_details'),
+                    onPressed: () => Navigator.pushNamed(
+                      context, 
+                      '/job_finder/job_details',
+                      arguments: job,
+                    ),
                     child: Text('View', style: TextStyle(fontSize: 12)),
                   ),
                 ),

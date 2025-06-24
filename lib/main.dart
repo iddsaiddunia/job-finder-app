@@ -5,7 +5,7 @@ import 'screens/shared/register_screen.dart';
 import 'screens/job_finder/home_screen.dart';
 import 'screens/job_finder/profile_screen.dart';
 import 'screens/job_finder/job_listings_screen.dart';
-import 'screens/job_finder/job_details_screen.dart';
+import 'screens/job_finder/job_details_screen.dart' as job_seeker;
 import 'screens/job_finder/application_status_screen.dart';
 import 'screens/job_finder/register_screen.dart';
 import 'screens/employer/home_screen.dart';
@@ -15,6 +15,7 @@ import 'screens/employer/job_postings_screen.dart';
 import 'screens/employer/applicant_list_screen.dart';
 import 'screens/employer/applicant_details_screen.dart';
 import 'screens/employer/register_screen.dart';
+import 'screens/employer/job_details_screen.dart' as employer;
 
 void main() {
   runApp(const JobFinderApp());
@@ -40,7 +41,7 @@ class JobFinderApp extends StatelessWidget {
         '/job_finder/home': (context) => JobFinderHomeScreen(),
         '/job_finder/profile': (context) => const JobFinderProfileScreen(),
         '/job_finder/job_listings': (context) => JobListingsScreen(),
-        '/job_finder/job_details': (context) => const JobDetailsScreen(),
+        '/job_finder/job_details': (context) => const job_seeker.JobDetailsScreen(),
         '/job_finder/application_status': (context) => ApplicationStatusScreen(),
         '/job_finder/register': (context) => const JobFinderRegisterScreen(),
         // Employer routes
@@ -48,6 +49,11 @@ class JobFinderApp extends StatelessWidget {
         '/employer/profile': (context) => const EmployerProfileScreen(),
         '/employer/post_job': (context) => const PostJobScreen(),
         '/employer/job_postings': (context) => JobPostingsScreen(),
+        '/employer/job_details': (context) => employer.JobDetailsScreen(jobId: ModalRoute.of(context)!.settings.arguments as int),
+        '/employer/job_applicants': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return ApplicantListScreen(jobId: args['jobId'] as int);
+        },
         '/employer/applicant_list': (context) => ApplicantListScreen(),
         '/employer/applicant_details': (context) => ApplicantDetailsScreen(),
         '/employer/register': (context) => const EmployerRegisterScreen(),

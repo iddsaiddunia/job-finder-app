@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'profile_screen.dart';
 import 'post_job_screen.dart';
 import 'job_postings_screen.dart';
 import 'notifications_tab.dart';
+import '../../services/job_service.dart';
 
 class EmployerHomeScreen extends StatefulWidget {
   const EmployerHomeScreen({super.key});
@@ -80,70 +82,103 @@ class _EmployerHomeScreenState extends State<EmployerHomeScreen> {
   }
 }
 
-class _EmployerDashboardTab extends StatelessWidget {
+class _EmployerDashboardTab extends StatefulWidget {
   final VoidCallback? onPostJob;
   final VoidCallback? onNotifications;
   const _EmployerDashboardTab({this.onPostJob, this.onNotifications});
 
   @override
-  Widget build(BuildContext context) {
-    // Demo summary data
-    final int totalJobs = 8;
-    final int totalApplicants = 42;
-    final int activeJobs = 3;
-    final int newApplications = 5;
-    final List<Map<String, String>> recentJobs = [
-      {
-        'title': 'Flutter Developer',
-        'date': '2025-06-10',
-        'status': 'Active',
-      },
-      {
-        'title': 'Backend Engineer',
-        'date': '2025-06-08',
-        'status': 'Closed',
-      },
-      {
-        'title': 'Product Manager',
-        'date': '2025-06-05',
-        'status': 'Active',
-      },
-    ];
+  State<_EmployerDashboardTab> createState() => _EmployerDashboardTabState();
+}
 
+class _EmployerDashboardTabState extends State<_EmployerDashboardTab> {
+  final JobService _jobService = JobService();
+  bool _isLoading = true;
+  String? _error;
+  
+  // Dashboard data
+  int totalJobs = 0;
+  int totalApplicants = 0;
+  int activeJobs = 0;
+  int newApplications = 0;
+  int applicationsTrend = 0;
+  List<Map<String, dynamic>> recentJobs = [];
+  
+  @override
+  void initState() {
+    super.initState();
+    _fetchDashboardData();
+  }
+  
+  Future<void> _fetchDashboardData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+      
+      final stats = await _jobService.getRecruiterDashboardStats();
+      
+      // Assign colors to recent jobs
+      final colors = [Colors.deepPurple, Colors.blue, Colors.teal, Colors.orange, Colors.indigo];
+      final recentJobsData = List<Map<String, dynamic>>.from(stats['recent_jobs'] ?? []);
+      
+      for (int i = 0; i < recentJobsData.length; i++) {
+        recentJobsData[i]['color'] = colors[i % colors.length];
+      }
+      
+      setState(() {
+        totalJobs = stats['total_jobs'] ?? 0;
+        totalApplicants = stats['total_applicants'] ?? 0;
+        activeJobs = stats['active_jobs'] ?? 0;
+        newApplications = stats['new_applications'] ?? 0;
+        applicationsTrend = stats['trends']?['applications'] ?? 0;
+        recentJobs = recentJobsData;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error in _fetchDashboardData: $e');
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        title: const Text(
+          'Employer Dashboard',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12, top: 4),
+            padding: const EdgeInsets.only(right: 12),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
                 IconButton(
                   icon: const Icon(Icons.notifications_none, size: 28),
-                  onPressed: onNotifications,
+                  onPressed: widget.onNotifications,
                 ),
                 Positioned(
-                  // Position the badge at the top right of the bell
-                  right: 4,
-                  top: 4,
+                  right: 0,
+                  top: 8,
                   child: Container(
-                    width: 20,
-                    height: 20,
+                    padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
                       color: Colors.red,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    alignment: Alignment.center,
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
                     child: const Text(
-                      '2', // Number of notifications
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        height: 1,
-                      ),
+                      '3',
+                      style: TextStyle(color: Colors.white, fontSize: 10),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -153,117 +188,297 @@ class _EmployerDashboardTab extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Overview', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 1.3,
-              children: [
-                _DashboardSummaryCard(
-                  icon: Icons.list_alt,
-                  label: 'Total Jobs',
-                  value: totalJobs.toString(),
-                  color: Colors.deepPurple,
-                ),
-                _DashboardSummaryCard(
-                  icon: Icons.people,
-                  label: 'Applicants',
-                  value: totalApplicants.toString(),
-                  color: Colors.blue,
-                ),
-                _DashboardSummaryCard(
-                  icon: Icons.check_circle,
-                  label: 'Active',
-                  value: activeJobs.toString(),
-                  color: Colors.green,
-                ),
-                _DashboardSummaryCard(
-                  icon: Icons.mail,
-                  label: 'New Apps',
-                  value: newApplications.toString(),
-                  color: Colors.orange,
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 3,
-                ),
-                icon: const Icon(Icons.add_box, size: 26, color: Colors.white),
-                label: const Text('Post a New Job'),
-                onPressed: onPostJob,
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text('Recent Job Postings', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            ...recentJobs.map((job) => Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: ListTile(
-                    leading: Icon(Icons.work_outline, color: Colors.deepPurple),
-                    title: Text(job['title']!),
-                    subtitle: Text('Posted on ${job['date']}'),
-                    trailing: Chip(
-                      label: Text(job['status']!, style: TextStyle(color: job['status'] == 'Active' ? Colors.green : Colors.grey)),
-                      backgroundColor: job['status'] == 'Active' ? Colors.green[50] : Colors.grey[100],
+      body: RefreshIndicator(
+        onRefresh: _fetchDashboardData,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error loading dashboard data',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _error!,
+                          style: TextStyle(color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        if (_error!.contains('Unauthorized') || _error!.contains('401'))
+                          ElevatedButton(
+                            onPressed: () {
+                              // Navigate to login screen
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                '/login',
+                                (route) => false,
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepPurple,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Log In Again'),
+                          )
+                        else
+                          ElevatedButton(
+                            onPressed: _fetchDashboardData,
+                            child: const Text('Retry'),
+                          ),
+                      ],
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Welcome banner with gradient background
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.deepPurple,
+                                Colors.deepPurple.shade700,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Welcome back!',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Today is ${DateFormat('d MMMM, yyyy').format(DateTime.now())}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white.withAlpha(230),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: widget.onPostJob,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.deepPurple,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Post a New Job'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Dashboard summary section
+                        const Text(
+                          'Dashboard Summary',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        GridView.count(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          childAspectRatio: 1.25, // Further adjusted to prevent overflow
+                          children: [
+                            _DashboardSummaryCard(
+                              title: 'Total Jobs',
+                              value: totalJobs.toString(),
+                              icon: Icons.work,
+                              color: Colors.blue,
+                              trend: null,
+                            ),
+                            _DashboardSummaryCard(
+                              title: 'Active Jobs',
+                              value: activeJobs.toString(),
+                              icon: Icons.check_circle,
+                              color: Colors.green,
+                              trend: null,
+                            ),
+                            _DashboardSummaryCard(
+                              title: 'Total Applicants',
+                              value: totalApplicants.toString(),
+                              icon: Icons.people,
+                              color: Colors.orange,
+                              trend: null,
+                            ),
+                            _DashboardSummaryCard(
+                              title: 'New Applications',
+                              value: newApplications.toString(),
+                              icon: Icons.person_add,
+                              color: Colors.purple,
+                              trend: applicationsTrend,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Recent job postings section
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Recent Job Postings',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                // Navigate to job postings screen
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => const JobPostingsScreen(),
+                                  ),
+                                );
+                              },
+                              child: const Text('View All'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (recentJobs.isNotEmpty)
+                          ...recentJobs.map((job) => _JobPostingCard(job: job)).toList()
+                        else
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: Text(
+                                'No job postings yet',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                )),
-          ],
-        ),
-      ),
-    );
+            
+        ),);
+      
+  
   }
 }
 
 class _DashboardSummaryCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
+  final String title;
   final String value;
+  final IconData icon;
   final Color color;
+  final int? trend;
 
   const _DashboardSummaryCard({
-    required this.icon,
-    required this.label,
+    required this.title,
     required this.value,
+    required this.icon,
     required this.color,
+    this.trend,
   });
 
   @override
   Widget build(BuildContext context) {
+    bool? trendDirection;
+    if (trend != null) {
+      trendDirection = trend! > 0 ? true : (trend! < 0 ? false : null);
+    }
+    
     return Card(
-      elevation: 3,
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 80,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min, // Use minimum space needed
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 30),
-            const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: color)),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 13, color: Colors.black87)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(26),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                if (trend != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: trendDirection == true
+                          ? Colors.green.withAlpha(26)
+                          : trendDirection == false
+                              ? Colors.red.withAlpha(26)
+                              : Colors.grey.withAlpha(26),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          trendDirection == true
+                              ? Icons.arrow_upward
+                              : trendDirection == false
+                                  ? Icons.arrow_downward
+                                  : Icons.remove,
+                          color: trendDirection == true
+                              ? Colors.green
+                              : trendDirection == false
+                                  ? Colors.red
+                                  : Colors.grey,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          trend!.abs().toString(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: trendDirection == true
+                                ? Colors.green
+                                : trendDirection == false
+                                    ? Colors.red
+                                    : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              title,
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
@@ -271,6 +486,102 @@ class _DashboardSummaryCard extends StatelessWidget {
   }
 }
 
+class _JobPostingCard extends StatelessWidget {
+  final Map<String, dynamic> job;
+
+  const _JobPostingCard({required this.job});
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isActive = job['status'] == 'Active';
+    final Color statusColor = isActive ? Colors.green : Colors.grey;
+    final Color cardColor = isActive ? Colors.white : Colors.grey[50]!;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      elevation: isActive ? 2 : 1,
+      shadowColor: isActive ? job['color'].withAlpha(51) : Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: cardColor,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: job['color'].withAlpha(51),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.work_outline, color: job['color'], size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        job['title'],
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Posted on ${job['date']}',
+                        style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withAlpha(26),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor.withAlpha(26)),
+                  ),
+                  child: Text(
+                    job['status'],
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w500, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.people_outline, size: 18, color: Colors.blue),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${job['applicants']} applicants',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () {},
+                  style: TextButton.styleFrom(
+                    foregroundColor: job['color'],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('View Details'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _EmployerProfileTab extends StatelessWidget {
   const _EmployerProfileTab();

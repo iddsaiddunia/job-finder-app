@@ -12,10 +12,14 @@ class JobService {
   Future<Map<String, String>> _getHeaders() async {
     final loginData = await TokenStorage.getLoginData();
     final token = loginData['access'];
-    return {
+    print('Auth token retrieved: ${token != null ? 'Token exists' : 'Token is null'}');
+    
+    final headers = {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+    print('Request headers: $headers');
+    return headers;
   }
 
   // Get all jobs (matches /api/jobs/)
@@ -61,8 +65,12 @@ class JobService {
   // Create a new job (matches /api/jobs/create/)
   Future<Map<String, dynamic>> createJob(Map<String, dynamic> jobData) async {
     try {
+      // Use the correct endpoint for job creation
       final url = Uri.parse('${ApiConstants.baseUrl}/api/jobs/create/');
       final headers = await _getHeaders();
+      
+      print('Sending job data to: $url');
+      print('Job data: ${jsonEncode(jobData)}');
       
       final response = await http.post(
         url,
@@ -70,13 +78,84 @@ class JobService {
         body: jsonEncode(jobData),
       );
       
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      
       if (response.statusCode == 201) {
         return jsonDecode(response.body);
       } else {
-        throw Exception('Failed to create job: ${response.statusCode}');
+        throw Exception('Failed to create job: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       throw Exception('Error creating job: $e');
+    }
+  }
+
+  // Get employer's job postings
+  Future<List<Map<String, dynamic>>> getEmployerJobs() async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/jobs/employer/');
+      final headers = await _getHeaders();
+      
+      print('Fetching employer jobs from: $url');
+      final response = await http.get(url, headers: headers);
+      
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> jobsJson = jsonDecode(response.body);
+        return jobsJson.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Failed to fetch employer jobs: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('Error fetching employer jobs: $e');
+      throw Exception('Error fetching employer jobs: $e');
+    }
+  }
+  
+  // Get job details by ID
+  Future<Map<String, dynamic>> getJobDetails(int jobId) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/jobs/$jobId/');
+      final headers = await _getHeaders();
+      
+      print('Fetching job details from: $url');
+      final response = await http.get(url, headers: headers);
+      
+      print('Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jobData = jsonDecode(response.body);
+        return jobData;
+      } else {
+        throw Exception('Failed to fetch job details: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching job details: $e');
+      throw Exception('Error fetching job details: $e');
+    }
+  }
+
+  // Get applicants for a specific job
+  Future<Map<String, dynamic>> getJobApplicants(int jobId) async {
+    try {
+      // Get all applicants for this job
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/jobs/$jobId/applicants/');
+      final headers = await _getHeaders();
+      
+      final response = await http.get(url, headers: headers);
+      
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        return data;
+      } else {
+        throw Exception('Failed to fetch job applicants: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching job applicants: $e');
+      throw Exception('Error fetching job applicants: $e');
     }
   }
 
@@ -100,11 +179,45 @@ class JobService {
   }
 
   // Apply for a job (matches /api/applications/create/)
+  // Check if user has already applied for a job
+  Future<bool> hasAppliedForJob(int jobId) async {
+    try {
+      // Get all applications for the current user
+      final applications = await getApplications();
+      print('Checking applications for job ID: $jobId');
+      print('Found ${applications.length} total applications');
+      
+      // Check if any application is for the specified job
+      for (var application in applications) {
+        if (application['job'] != null) {
+          print('Application job ID: ${application['job']['id']}');
+          if (application['job']['id'] == jobId) {
+            print('Found existing application for job ID: $jobId');
+            return true;
+          }
+        }
+      }
+      return false;
+    } catch (e) {
+      print('Error checking application status: $e');
+      return false; // Default to false if there's an error
+    }
+  }
+
   Future<Map<String, dynamic>> applyForJob({
     required int jobId,
     String? coverLetter,
   }) async {
     try {
+      print('Attempting to apply for job ID: $jobId');
+      
+      // First check if the user has already applied
+      final alreadyApplied = await hasAppliedForJob(jobId);
+      if (alreadyApplied) {
+        print('User has already applied for job ID: $jobId');
+        throw Exception('You have already applied for this job');
+      }
+      
       final url = Uri.parse('${ApiConstants.baseUrl}/api/applications/create/');
       final headers = await _getHeaders();
       
@@ -113,18 +226,35 @@ class JobService {
         if (coverLetter != null && coverLetter.isNotEmpty) 'cover_letter': coverLetter,
       };
       
+      print('Sending application data: $applicationData');
       final response = await http.post(
         url,
         headers: headers,
         body: jsonEncode(applicationData),
       );
       
+      print('Application response status: ${response.statusCode}');
+      print('Application response body: ${response.body}');
+      
       if (response.statusCode == 201) {
         return jsonDecode(response.body);
+      } else if (response.statusCode == 400) {
+        // Try to parse the error message from the response
+        try {
+          final errorData = jsonDecode(response.body);
+          if (errorData['detail'] != null) {
+            throw Exception(errorData['detail']);
+          }
+        } catch (_) {}
+        throw Exception('Failed to apply for job: Bad request');
       } else {
         throw Exception('Failed to apply for job: ${response.statusCode}');
       }
     } catch (e) {
+      print('Error in applyForJob: $e');
+      if (e is Exception) {
+        throw e;
+      }
       throw Exception('Error applying for job: $e');
     }
   }
@@ -269,6 +399,46 @@ class JobService {
       }
     } catch (e) {
       throw Exception('Error fetching dashboard stats: $e');
+    }
+  }
+  
+  // Get recruiter dashboard statistics from backend (matches /api/dashboard/recruiter-stats/)
+  Future<Map<String, dynamic>> getRecruiterDashboardStats() async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/dashboard/recruiter-stats/');
+      final loginData = await TokenStorage.getLoginData();
+      final token = loginData['access'];
+      
+      print('DEBUG: Token for recruiter stats: $token'); // Debug log
+      
+      if (token == null) {
+        throw Exception('Authentication token is missing');
+      }
+      
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+      
+      print('DEBUG: Making request to $url with headers: $headers'); // Debug log
+      
+      final response = await http.get(url, headers: headers);
+      
+      print('DEBUG: Response status: ${response.statusCode}'); // Debug log
+      print('DEBUG: Response body: ${response.body}'); // Debug log
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else if (response.statusCode == 401) {
+        throw Exception('Unauthorized: Please log in again');
+      } else if (response.statusCode == 403) {
+        throw Exception('Only recruiters can access dashboard stats');
+      } else {
+        throw Exception('Failed to fetch recruiter dashboard stats: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('DEBUG: Error in getRecruiterDashboardStats: $e'); // Debug log
+      throw Exception('Error fetching recruiter dashboard stats: $e');
     }
   }
 }
