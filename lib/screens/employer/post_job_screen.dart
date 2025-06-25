@@ -243,7 +243,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Job posted successfully!')),
         );
-        Navigator.pop(context);
+        
+        // Navigate back to the employer home screen
+        Navigator.of(context).pushReplacementNamed('/employer/home');
       }
     } catch (e) {
       setState(() {

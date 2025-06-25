@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:job_finder/screens/job_finder/application_status_screen.dart';
 import 'package:job_finder/screens/job_finder/profile_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
@@ -17,7 +18,7 @@ class _JobFinderHomeScreenState extends State<JobFinderHomeScreen> {
   static const List<Widget> _pages = [
     _DashboardView(),
     _JobListingsView(),
-    _ApplicationStatusView(),
+    ApplicationStatusScreen(),
     JobFinderProfileScreen(),
   ];
 

@@ -13,10 +13,22 @@ class ApplicantListScreen extends StatefulWidget {
 
   @override
   State<ApplicantListScreen> createState() => _ApplicantListScreenState();
-
 }
 
-class _ApplicantListScreenState extends State<ApplicantListScreen> {
+class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTickerProviderStateMixin {
+  // Helper function to format skills
+  String _formatSkills(dynamic skills) {
+    if (skills == null) return '';
+    
+    if (skills is List) {
+      return skills.map((skill) => skill.toString()).join(', ');
+    } else if (skills is String) {
+      return skills;
+    } else {
+      return skills.toString();
+    }
+  }
+
   final JobService _jobService = JobService();
   bool _isLoading = true;
   String _errorMessage = '';
@@ -24,11 +36,21 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> {
   List<Map<String, dynamic>> _allApplicants = [];
   List<Map<String, dynamic>> _recommendedApplicants = [];
   Map<String, dynamic>? _jobDetails;
+  
+  // Tab controller
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _fetchJobAndApplicants();
+  }
+  
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchJobAndApplicants() async {
@@ -74,45 +96,6 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> {
       } catch (e) {
         print('Error fetching applicants: $e');
         print('Stack trace: ${StackTrace.current}');
-        // If the API fails, use mock data for now
-        applicantsResponse = {
-          'applicants': [
-            {
-              'id': 1,
-              'status': 'Pending Review',
-              'user': {
-                'id': 1,
-                'name': 'Jane Doe',
-                'email': 'jane.doe@example.com',
-                'phone': '+1234567890',
-                'skills': ['Flutter', 'Django'],
-                'education': 'BSc Computer Science'
-              },
-              'match_score': 4.2,
-              'resume_url': null,
-              'cover_letter': 'I am interested in this position...',
-              'created_at': '2025-06-20'
-            },
-            {
-              'id': 2,
-              'status': 'Interviewed',
-              'user': {
-                'id': 2,
-                'name': 'John Smith',
-                'email': 'john.smith@example.com',
-                'phone': '+0987654321',
-                'skills': ['React', 'Node.js'],
-                'education': 'BSc IT'
-              },
-              'match_score': 3.9,
-              'resume_url': null,
-              'cover_letter': 'I have experience in...',
-              'created_at': '2025-06-19'
-            }
-          ],
-          'total_count': 2
-        };
-        print('Using mock data for applicants');
       }
       
       setState(() {
@@ -123,8 +106,8 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> {
         // Process recommended candidates
         _recommendedApplicants = recommendedCandidates.map((candidate) => {
           'name': candidate['name'] ?? 'Unknown',
-          'skills': candidate['skills']?.join(', ') ?? '',
-          'education': candidate['education'] ?? 'Not specified',
+          'skills': _formatSkills(candidate['skills']),
+          'education': candidate['education'], // Pass raw education data
           'rating': candidate['match_score'] ?? 0.0,
           'email': candidate['email'] ?? '',
           'phone': candidate['phone'] ?? '',
@@ -132,24 +115,26 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> {
           'id': candidate['id'],
           'profile_id': candidate['profile_id'],
           'resume_url': candidate['resume_url'],
+          'experience': candidate['experience'] ?? [],
         }).toList();
         
         // Process all applicants
         final List<dynamic> applicants = applicantsResponse['applicants'] ?? [];
         _allApplicants = applicants.map((applicant) => {
-          'name': applicant['user']['name'] ?? 'Unknown',
-          'skills': (applicant['user']['skills'] as List<dynamic>?)?.join(', ') ?? '',
-          'education': applicant['user']['education'] ?? 'Not specified',
-          'rating': applicant['match_score'] ?? 0.0,
-          'email': applicant['user']['email'] ?? '',
-          'phone': applicant['user']['phone'] ?? '',
+          'name': applicant['name'] ?? 'Unknown',
+          'skills': _formatSkills(applicant['skills']),
+          'education': applicant['education'], // Pass raw education data
+          'rating': applicant['rating'] ?? 0.0,
+          'email': applicant['email'] ?? '',
+          'phone': applicant['phone'] ?? '',
           'status': applicant['status'] ?? 'Applied',
-          'id': applicant['id'],
-          'application_id': applicant['id'],
-          'profile_id': applicant['user']['id'],
+          'id': applicant['application_id'],
+          'application_id': applicant['application_id'],
+          'profile_id': applicant['profile_id'],
           'resume_url': applicant['resume_url'],
           'cover_letter': applicant['cover_letter'],
-          'applied_date': applicant['created_at'],
+          'applied_at': applicant['applied_at'],
+          'experience': applicant['experience'] ?? [],
         }).toList();
       });
     } catch (e) {
@@ -159,167 +144,95 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> {
       });
     }
   }
+  
+  // Build a tab for displaying applicants
+  Widget _buildApplicantsTab(List<Map<String, dynamic>> applicants, String title) {
+    return applicants.isEmpty
+        ? Center(child: Text('No ${title.toLowerCase()} available'))
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'Total: ${applicants.length}',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ...applicants.map((app) => ApplicantCard(
+                  name: app['name'],
+                  skills: app['skills'],
+                  education: app['education'],
+                  rating: app['rating'],
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/employer/applicant_details',
+                    arguments: {
+                      'name': app['name'],
+                      'skills': app['skills'],
+                      'education': app['education'],
+                      'rating': app['rating'],
+                      'experience': app['experience'] ?? [],
+                      'email': app['email'] ?? '',
+                      'phone': app['phone'] ?? '',
+                      'status': app['status'] ?? '',
+                      'jobId': widget.jobId,
+                      'resume_url': app['resume_url'],
+                      'profile_id': app['profile_id'],
+                      'application_id': app['application_id'],
+                      'cover_letter': app['cover_letter'],
+                      'applied_at': app['applied_at'],
+                      'feedbacks': app['feedbacks'],
+                      'feedback_count': app['feedback_count'],
+                    },
+                  ),
+                )),
+              ],
+            ),
+          );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Job Applicants'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {
-                _isLoading = true;
-                _errorMessage = '';
-              });
-              _fetchJobAndApplicants();
-            },
-          ),
-        ],
+        title: Text(_jobTitle),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          tabs: const [
+            Tab(text: 'All Applicants'),
+            Tab(text: 'Recommended'),
+          ],
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage.isNotEmpty
-              ? Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)))
-              : ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+              ? Center(child: Text(_errorMessage))
+              : TabBarView(
+                  controller: _tabController,
                   children: [
-                    Card(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Job: $_jobTitle',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Total Applicants: ${_allApplicants.length + _recommendedApplicants.length}',
-                              style: TextStyle(color: Colors.grey[700]),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (_recommendedApplicants.isNotEmpty) ...[
-            Card(
-              color: Colors.green[50],
-              margin: const EdgeInsets.only(bottom: 16),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.recommend, color: Colors.green),
-                        SizedBox(width: 8),
-                        Text(
-                          'Recommended Applicants',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.green),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    ..._recommendedApplicants.map((app) => ApplicantCard(
-                          name: app['name'],
-                          skills: app['skills'],
-                          education: app['education'],
-                          rating: app['rating'],
-                          onTap: () => Navigator.pushNamed(
-                            context,
-                            '/employer/applicant_details',
-                            arguments: {
-                              'name': app['name'],
-                              'skills': app['skills'],
-                              'education': app['education'],
-                              'rating': app['rating'],
-                              'experience': [
-                                {
-                                  'title': 'Mobile Developer',
-                                  'company': 'TechCorp',
-                                  'years': 2,
-                                },
-                                {
-                                  'title': 'Intern',
-                                  'company': 'StartupX',
-                                  'years': 1,
-                                },
-                              ],
-                              'email': app['email'] ?? 'applicant@email.com',
-                              'phone': app['phone'] ?? '+1234567890',
-                              'status': app['status'] ?? 'Available',
-                              'jobId': widget.jobId,
-                            },
-                          ),
-                        )),
+                    // All Applicants Tab
+                    _buildApplicantsTab(_allApplicants, 'All Applicants'),
+                    
+                    // Recommended Tab
+                    _buildApplicantsTab(_recommendedApplicants, 'Recommended Applicants'),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 18),
-          ],
-          Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.people, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text(
-                        'All Applicants',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.blue),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ..._allApplicants.map((app) => ApplicantCard(
-                        name: app['name'],
-                        skills: app['skills'],
-                        education: app['education'],
-                        rating: app['rating'],
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          '/employer/applicant_details',
-                          arguments: {
-                            'name': app['name'],
-                            'skills': app['skills'],
-                            'education': app['education'],
-                            'rating': app['rating'],
-                            'experience': [
-                              {
-                                'title': 'Mobile Developer',
-                                'company': 'TechCorp',
-                                'years': 2,
-                              },
-                              {
-                                'title': 'Intern',
-                                'company': 'StartupX',
-                                'years': 1,
-                              },
-                            ],
-                            'email': app['email'] ?? 'applicant@email.com',
-                            'phone': app['phone'] ?? '+1234567890',
-                            'status': app['status'] ?? 'Available',
-                            'jobId': widget.jobId,
-                          },
-                        ),
-                      )),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
-

@@ -41,6 +41,8 @@ class JobService {
     }
   }
 
+  // This method was removed as we already have getJobDetails
+
   // Get recommended jobs for current user (matches /api/jobs/recommended/)
   Future<List<Map<String, dynamic>>> getRecommendedJobs() async {
     try {
@@ -166,15 +168,36 @@ class JobService {
       final headers = await _getHeaders();
       
       final response = await http.get(url, headers: headers);
+      print('Applications API response status: ${response.statusCode}');
+      print('Applications API response body: ${response.body}');
       
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.cast<Map<String, dynamic>>();
+        // Handle both array and object response formats
+        final dynamic responseData = jsonDecode(response.body);
+        
+        if (responseData is List) {
+          // If the response is already a list, use it directly
+          return responseData.cast<Map<String, dynamic>>();
+        } else if (responseData is Map) {
+          // If the response is an object with a results field (common Django REST pattern)
+          if (responseData.containsKey('results') && responseData['results'] is List) {
+            return (responseData['results'] as List).cast<Map<String, dynamic>>();
+          }
+          // If it's some other kind of object response, return an empty list
+          return [];
+        }
+        // Default to empty list for any other response format
+        return [];
+      } else if (response.statusCode == 204) {
+        // No content means no applications
+        return [];
       } else {
         throw Exception('Failed to fetch applications: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Error fetching applications: $e');
+      print('Error in getApplications: $e');
+      // Return empty list instead of throwing to avoid crashes
+      return [];
     }
   }
 

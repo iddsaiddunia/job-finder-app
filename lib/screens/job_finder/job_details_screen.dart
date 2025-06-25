@@ -75,6 +75,47 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       });
     }
   }
+  
+  Future<void> _applyForJob(int jobId) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+      
+      developer.log('Applying for job ID: $jobId');
+      await JobService().applyForJob(jobId: jobId);
+      
+      setState(() {
+        _hasApplied = true;
+        _isLoading = false;
+      });
+      developer.log('Successfully applied for job ID: $jobId');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Successfully applied for this job!')),
+      );
+    } catch (e) {
+      developer.log('Error applying for job: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      
+      // Check if this is a duplicate application error
+      final String errorMessage = e.toString().toLowerCase();
+      if (errorMessage.contains('already applied')) {
+        setState(() {
+          _hasApplied = true; // Update UI to show already applied
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('You have already applied for this job')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to apply: ${e.toString().replaceAll('Exception: ', '')}')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -224,14 +265,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                           }
                           
                           setState(() => _isLoading = true);
-                          await JobService().applyForJob(jobId: jobId);
-                          setState(() {
-                            _isLoading = false;
-                            _hasApplied = true;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Application submitted successfully!')),
-                          );
+                          await _applyForJob(jobId);
                         } catch (e) {
                           setState(() => _isLoading = false);
                           ScaffoldMessenger.of(context).showSnackBar(

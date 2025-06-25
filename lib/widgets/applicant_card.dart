@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 
 class ApplicantCard extends StatelessWidget {
   final String name;
   final String skills;
-  final String education;
+  final dynamic education;
   final double rating;
   final VoidCallback? onTap;
 
@@ -15,6 +16,51 @@ class ApplicantCard extends StatelessWidget {
     required this.rating,
     this.onTap,
   });
+  
+  /// Formats education data into a readable string
+  /// Handles different formats: string, list, or JSON string
+  String _formatEducation() {
+    if (education == null) return '';
+    
+    try {
+      // If it's already a string and not JSON, return as is
+      if (education is String && !education.toString().trim().startsWith('[')) {
+        return education.toString();
+      }
+      
+      // Parse education data
+      List<dynamic> educationList;
+      if (education is String) {
+        // Try to parse as JSON
+        try {
+          educationList = jsonDecode(education);
+        } catch (e) {
+          return education;
+        }
+      } else if (education is List) {
+        educationList = education;
+      } else {
+        return education.toString();
+      }
+      
+      if (educationList.isEmpty) return '';
+      
+      // Format the most recent education entry (assuming the list is ordered with most recent first)
+      var recentEducation = educationList.first;
+      if (recentEducation is Map) {
+        final degree = recentEducation['degree'] ?? '';
+        final institution = recentEducation['institution'] ?? '';
+        final year = recentEducation['year'] ?? '';
+        
+        return '$degree${degree.isNotEmpty && institution.isNotEmpty ? ' at ' : ''}$institution${year.isNotEmpty ? ' ($year)' : ''}';
+      } else {
+        return recentEducation.toString();
+      }
+    } catch (e) {
+      // Fallback for any parsing errors
+      return education.toString();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +88,7 @@ class ApplicantCard extends StatelessWidget {
                         Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         SizedBox(height: 4),
                         Text('Skills: $skills', style: TextStyle(fontSize: 13)),
-                        Text('Education: $education', style: TextStyle(fontSize: 13)),
+                        Text('Education: ${_formatEducation()}', style: TextStyle(fontSize: 13)),
                       ],
                     ),
                   ),
