@@ -82,6 +82,23 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
         print('Fetching recommended candidates for job ID: ${widget.jobId}');
         recommendedCandidates = await _jobService.getCandidateRecommendations(widget.jobId!);
         print('Recommended candidates fetched successfully: ${recommendedCandidates.length}');
+        
+        // Debug log to examine the structure of recommended candidates
+        if (recommendedCandidates.isNotEmpty) {
+          print('Recommended candidates count: ${recommendedCandidates.length}');
+          print('First recommended candidate data structure:');
+          recommendedCandidates[0].forEach((key, value) {
+            print('$key: $value (${value?.runtimeType})'); 
+          });
+          
+          // Check for duplicate names
+          final names = recommendedCandidates.map((c) => c['name'] ?? c['full_name'] ?? c['username']).toList();
+          final uniqueNames = names.toSet().toList();
+          print('Total names: ${names.length}, Unique names: ${uniqueNames.length}');
+          if (names.length > uniqueNames.length) {
+            print('Warning: Duplicate names detected in recommended candidates');
+          }
+        }
       } catch (e) {
         print('Error fetching recommended candidates: $e');
         // Continue with empty recommended candidates list
@@ -105,15 +122,22 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
         
         // Process recommended candidates
         _recommendedApplicants = recommendedCandidates.map((candidate) => {
-          'name': candidate['name'] ?? 'Unknown',
+          // Ensure we get the proper name from the candidate data
+          'name': candidate['name'] ?? candidate['full_name'] ?? candidate['username'] ?? 'Unknown',
           'skills': _formatSkills(candidate['skills']),
           'education': candidate['education'], // Pass raw education data
-          'rating': candidate['match_score'] ?? 0.0,
+          // Normalize match_score to a 0-5 scale for rating display
+          'rating': (candidate['match_score'] is num) 
+              ? (candidate['match_score'] * 5.0 / 100.0).clamp(0.0, 5.0) 
+              : (candidate['rating'] is num) 
+                  ? candidate['rating'].toDouble() 
+                  : 0.0,
           'email': candidate['email'] ?? '',
           'phone': candidate['phone'] ?? '',
           'status': 'Recommended',
           'id': candidate['id'],
           'profile_id': candidate['profile_id'],
+          'application_id': candidate['id'], // Use id as application_id for recommended candidates
           'resume_url': candidate['resume_url'],
           'experience': candidate['experience'] ?? [],
         }).toList();

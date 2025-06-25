@@ -464,4 +464,83 @@ class JobService {
       throw Exception('Error fetching recruiter dashboard stats: $e');
     }
   }
+  
+  // Submit feedback and rating for an applicant
+  Future<Map<String, dynamic>> submitApplicantFeedback({
+    required int applicationId,
+    required int profileId,
+    required double rating,
+    required String comment,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/applications/$applicationId/feedback/');
+      final headers = await _getHeaders();
+      
+      // Make sure headers include content-type for JSON
+      headers['Content-Type'] = 'application/json';
+      
+      final requestData = {
+        'profile_id': profileId,
+        'rating': rating,
+        'comment': comment,
+      };
+      
+      print('DEBUG: Submitting feedback to $url');
+      print('DEBUG: Headers: $headers');
+      print('DEBUG: Request data: $requestData');
+      print('DEBUG: Comment length: ${comment.length}');
+      print('DEBUG: Comment content: "$comment"');
+      
+      final String jsonBody = jsonEncode(requestData);
+      print('DEBUG: JSON encoded body: $jsonBody');
+      
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonBody,
+      );
+      
+      print('DEBUG: Feedback submission response code: ${response.statusCode}');
+      print('DEBUG: Response headers: ${response.headers}');
+      print('DEBUG: Response body: ${response.body}');
+      
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        print('DEBUG: Parsed response data: $responseData');
+        return responseData;
+      } else {
+        throw Exception('Failed to submit feedback: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('DEBUG: Error submitting feedback: $e');
+      throw Exception('Error submitting feedback: $e');
+    }
+  }
+  
+  // Get all feedback for a job seeker profile
+  Future<Map<String, dynamic>> getSeekerFeedback(int profileId) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/seekers/$profileId/feedback/');
+      final headers = await _getHeaders();
+      
+      print('DEBUG: Fetching seeker feedback from $url');
+      print('DEBUG: Using headers: $headers');
+      
+      final response = await http.get(url, headers: headers);
+      
+      print('DEBUG: Feedback response status: ${response.statusCode}');
+      print('DEBUG: Feedback response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('DEBUG: Parsed feedback data: $data');
+        return data;
+      } else {
+        throw Exception('Failed to get seeker feedback: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('ERROR: Exception in getSeekerFeedback: $e');
+      throw Exception('Error getting seeker feedback: $e');
+    }
+  }
 }

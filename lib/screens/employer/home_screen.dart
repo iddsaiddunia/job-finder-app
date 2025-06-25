@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../providers/notification_provider.dart';
+import '../../widgets/notification_badge.dart';
 import 'profile_screen.dart';
 import 'post_job_screen.dart';
 import 'job_postings_screen.dart';
 import 'notifications_tab.dart';
 import '../../services/job_service.dart';
+import '../common/notifications_screen.dart';
 
 class EmployerHomeScreen extends StatefulWidget {
   const EmployerHomeScreen({super.key});
@@ -23,7 +27,8 @@ class _EmployerHomeScreenState extends State<EmployerHomeScreen> {
     ),
     const _EmployerJobPostingsTab(),
     const _EmployerPostJobTab(),
-    const EmployerNotificationsTab(),
+    // const EmployerNotificationsTab(),
+    NotificationsScreen(),
     const _EmployerProfileTab(),
   ];
 
@@ -65,10 +70,21 @@ class _EmployerHomeScreenState extends State<EmployerHomeScreen> {
               selectedIcon: const Icon(Icons.add_box, size: 22),
               label: 'Post Job',
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.notifications_none_outlined, size: 22),
-              selectedIcon: const Icon(Icons.notifications, size: 22),
-              label: 'Notifications',
+            Consumer<NotificationProvider>(
+              builder: (context, notificationProvider, _) {
+                return NavigationDestination(
+                  icon: NotificationBadge(
+                    child: const Icon(Icons.notifications_none_outlined, size: 22),
+                    onTap: () {
+                      if (_selectedIndex != 3) {
+                        _onItemTapped(3);
+                      }
+                    },
+                  ),
+                  selectedIcon: const Icon(Icons.notifications, size: 22),
+                  label: 'Notifications',
+                );
+              },
             ),
             NavigationDestination(
               icon: const Icon(Icons.person_outline, size: 22),

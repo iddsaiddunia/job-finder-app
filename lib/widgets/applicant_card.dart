@@ -112,7 +112,13 @@ class ApplicantCard extends StatelessWidget {
                     children: [
                       Icon(Icons.star, color: Colors.white, size: 15),
                       SizedBox(width: 3),
-                      Text(rating.toStringAsFixed(1), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        // Handle potential invalid ratings
+                        (rating >= 0) 
+                            ? rating.toStringAsFixed(1) 
+                            : '0.0',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)
+                      ),
                     ],
                   ),
                 ),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/notification_provider.dart';
 import 'screens/shared/splash_screen.dart';
 import 'screens/shared/login_screen.dart';
 import 'screens/shared/register_screen.dart';
@@ -16,9 +18,17 @@ import 'screens/employer/applicant_list_screen.dart';
 import 'screens/employer/applicant_details_screen.dart';
 import 'screens/employer/register_screen.dart';
 import 'screens/employer/job_details_screen.dart' as employer;
+import 'screens/common/notifications_screen.dart';
 
 void main() {
-  runApp(const JobFinderApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+      ],
+      child: const JobFinderApp(),
+    ),
+  );
 }
 
 class JobFinderApp extends StatelessWidget {
@@ -44,6 +54,7 @@ class JobFinderApp extends StatelessWidget {
         '/job_finder/job_details': (context) => const job_seeker.JobDetailsScreen(),
         '/job_finder/application_status': (context) => ApplicationStatusScreen(),
         '/job_finder/register': (context) => const JobFinderRegisterScreen(),
+        '/job_finder/notifications': (context) => const NotificationsScreen(),
         // Employer routes
         '/employer/home': (context) => EmployerHomeScreen(),
         '/employer/profile': (context) => const EmployerProfileScreen(),
@@ -55,8 +66,28 @@ class JobFinderApp extends StatelessWidget {
           return ApplicantListScreen(jobId: args['jobId'] as int);
         },
         '/employer/applicant_list': (context) => ApplicantListScreen(),
-        '/employer/applicant_details': (context) => ApplicantDetailsScreen(),
+        '/employer/applicant_details': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return ApplicantDetailsScreen(
+            applicantName: args['name'] as String,
+            skills: args['skills'] as String,
+            education: args['education'],
+            rating: args['rating'] as double,
+            experience: args['experience'] as List<dynamic>?,
+            email: args['email'] as String?,
+            phone: args['phone'] as String?,
+            status: args['status'] as String?,
+            resumeUrl: args['resume_url'] as String?,
+            coverLetter: args['cover_letter'] as String?,
+            appliedDate: args['applied_at'] as String?,
+            profileId: args['profile_id'] as int?,
+            applicationId: args['application_id'] as int?,
+            feedbackCount: args['feedback_count'] as int?,
+            feedbacks: args['feedbacks'] as List<dynamic>?,
+          );
+        },
         '/employer/register': (context) => const EmployerRegisterScreen(),
+        '/employer/notifications': (context) => const NotificationsScreen(),
         '/employer_profile_setup': (context) => const EmployerProfileScreen(),
       },
       debugShowCheckedModeBanner: false,

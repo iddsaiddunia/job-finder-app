@@ -290,63 +290,63 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             const SizedBox(height: 16),
             
             // Edit and Close buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Navigate to edit job screen
-                    Navigator.pushNamed(
-                      context,
-                      '/employer/edit_job',
-                      arguments: _jobDetails['id'],
-                    );
-                  },
-                  icon: const Icon(Icons.edit),
-                  label: const Text('Edit Job'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Toggle job status
-                    // This is a placeholder - implement the actual API call
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(isActive ? 'Close Job' : 'Reopen Job'),
-                        content: Text(
-                          isActive 
-                            ? 'Are you sure you want to close this job posting? It will no longer be visible to job seekers.'
-                            : 'Are you sure you want to reopen this job posting? It will be visible to job seekers again.'
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              // Implement toggle job status API call
-                              Navigator.pop(context);
-                            },
-                            child: const Text('Confirm'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  icon: Icon(isActive ? Icons.close : Icons.check),
-                  label: Text(isActive ? 'Close Job' : 'Reopen Job'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isActive ? Colors.red : Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
+            // Row(
+            //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            //   children: [
+            //     ElevatedButton.icon(
+            //       onPressed: () {
+            //         // Navigate to edit job screen
+            //         Navigator.pushNamed(
+            //           context,
+            //           '/employer/edit_job',
+            //           arguments: _jobDetails['id'],
+            //         );
+            //       },
+            //       icon: const Icon(Icons.edit),
+            //       label: const Text('Edit Job'),
+            //       style: ElevatedButton.styleFrom(
+            //         backgroundColor: Colors.blue,
+            //         foregroundColor: Colors.white,
+            //       ),
+            //     ),
+            //     ElevatedButton.icon(
+            //       onPressed: () {
+            //         // Toggle job status
+            //         // This is a placeholder - implement the actual API call
+            //         showDialog(
+            //           context: context,
+            //           builder: (context) => AlertDialog(
+            //             title: Text(isActive ? 'Close Job' : 'Reopen Job'),
+            //             content: Text(
+            //               isActive 
+            //                 ? 'Are you sure you want to close this job posting? It will no longer be visible to job seekers.'
+            //                 : 'Are you sure you want to reopen this job posting? It will be visible to job seekers again.'
+            //             ),
+            //             actions: [
+            //               TextButton(
+            //                 onPressed: () => Navigator.pop(context),
+            //                 child: const Text('Cancel'),
+            //               ),
+            //               TextButton(
+            //                 onPressed: () {
+            //                   // Implement toggle job status API call
+            //                   Navigator.pop(context);
+            //                 },
+            //                 child: const Text('Confirm'),
+            //               ),
+            //             ],
+            //           ),
+            //         );
+            //       },
+            //       icon: Icon(isActive ? Icons.close : Icons.check),
+            //       label: Text(isActive ? 'Close Job' : 'Reopen Job'),
+            //       style: ElevatedButton.styleFrom(
+            //         backgroundColor: isActive ? Colors.red : Colors.green,
+            //         foregroundColor: Colors.white,
+            //       ),
+            //     ),
+            //   ],
+            // ),
           ],
         ],
       ),

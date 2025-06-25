@@ -189,134 +189,138 @@ class _JobPostingsScreenState extends State<JobPostingsScreen> {
                                       arguments: job['id'],
                                     );
                                   },
-                                  child: Card(
-                                    margin: const EdgeInsets.only(bottom: 16),
-                                    elevation: 2,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Header with title and status
-                                          Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              // Job icon
-                                              CircleAvatar(
-                                                backgroundColor: Colors.deepPurple.shade50,
-                                                child: const Icon(Icons.work, color: Colors.deepPurple),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              // Title and location
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      job['title'] ?? 'Untitled Job',
-                                                      style: const TextStyle(
-                                                        fontWeight: FontWeight.bold, 
-                                                        fontSize: 18
-                                                      ),
-                                                      maxLines: 2,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Row(
-                                                      children: [
-                                                        const Icon(Icons.location_on, size: 14, color: Colors.grey),
-                                                        const SizedBox(width: 4),
-                                                        Expanded(
-                                                          child: Text(
-                                                            job['location'] ?? 'No location specified',
-                                                            style: TextStyle(color: Colors.grey[700], fontSize: 14),
-                                                            maxLines: 1,
-                                                            overflow: TextOverflow.ellipsis,
-                                                          ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                    child: Card(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                    
+                                      elevation: 2,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // Header with title and status
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                // Job icon
+                                                CircleAvatar(
+                                                  backgroundColor: Colors.deepPurple.shade50,
+                                                  child: const Icon(Icons.work, color: Colors.deepPurple),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                // Title and location
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        job['title'] ?? 'Untitled Job',
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.bold, 
+                                                          fontSize: 18
                                                         ),
-                                                      ],
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                                                          const SizedBox(width: 4),
+                                                          Expanded(
+                                                            child: Text(
+                                                              job['location'] ?? 'No location specified',
+                                                              style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                // Status chip
+                                                Chip(
+                                                  label: Text(
+                                                    status,
+                                                    style: TextStyle(
+                                                      color: isActive ? Colors.green[700] : Colors.red[700],
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  backgroundColor: isActive ? Colors.green[50] : Colors.red[50],
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            const Divider(height: 1),
+                                            const SizedBox(height: 12),
+                                            // Job details
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(vertical: 4),
+                                              child: SingleChildScrollView(
+                                                scrollDirection: Axis.horizontal,
+                                                child: Row(
+                                                  children: [
+                                                    _buildInfoChip(
+                                                      Icons.attach_money, 
+                                                      '${job['salary_min'] ?? 0} - ${job['salary_max'] ?? 0}',
+                                                      Colors.green,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    _buildInfoChip(
+                                                      Icons.business_center, 
+                                                      job['job_type'] ?? 'Unknown',
+                                                      Colors.blue,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    _buildInfoChip(
+                                                      Icons.people, 
+                                                      '$applicantCount applicants',
+                                                      Colors.orange,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    _buildInfoChip(
+                                                      Icons.calendar_today, 
+                                                      'Posted: ${job['created_at']?.toString().substring(0, 10) ?? 'Unknown'}',
+                                                      Colors.purple,
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                              // Status chip
-                                              Chip(
-                                                label: Text(
-                                                  status,
-                                                  style: TextStyle(
-                                                    color: isActive ? Colors.green[700] : Colors.red[700],
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                                backgroundColor: isActive ? Colors.green[50] : Colors.red[50],
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 12),
-                                          const Divider(height: 1),
-                                          const SizedBox(height: 12),
-                                          // Job details
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(vertical: 4),
-                                            child: SingleChildScrollView(
-                                              scrollDirection: Axis.horizontal,
-                                              child: Row(
-                                                children: [
-                                                  _buildInfoChip(
-                                                    Icons.attach_money, 
-                                                    '${job['salary_min'] ?? 0} - ${job['salary_max'] ?? 0}',
-                                                    Colors.green,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  _buildInfoChip(
-                                                    Icons.business_center, 
-                                                    job['job_type'] ?? 'Unknown',
-                                                    Colors.blue,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  _buildInfoChip(
-                                                    Icons.people, 
-                                                    '$applicantCount applicants',
-                                                    Colors.orange,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  _buildInfoChip(
-                                                    Icons.calendar_today, 
-                                                    'Posted: ${job['created_at']?.toString().substring(0, 10) ?? 'Unknown'}',
-                                                    Colors.purple,
-                                                  ),
-                                                ],
-                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          // View details indicator
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.end,
-                                            children: [
-                                              Text(
-                                                'Tap to view details',
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                  fontSize: 12,
-                                                  fontStyle: FontStyle.italic,
+                                            const SizedBox(height: 8),
+                                            // View details indicator
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  'Tap to view details',
+                                                  style: TextStyle(
+                                                    color: Colors.grey[600],
+                                                    fontSize: 12,
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
                                                 ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Icon(
-                                                Icons.arrow_forward_ios,
-                                                size: 12,
-                                                color: Colors.grey[600],
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                                const SizedBox(width: 4),
+                                                Icon(
+                                                  Icons.arrow_forward_ios,
+                                                  size: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),

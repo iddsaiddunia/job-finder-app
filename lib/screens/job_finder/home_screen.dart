@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:job_finder/screens/job_finder/application_status_screen.dart';
 import 'package:job_finder/screens/job_finder/profile_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../services/user_service.dart';
 import '../../services/token_storage.dart';
+import '../../providers/notification_provider.dart';
+import '../../widgets/notification_badge.dart';
+import '../common/notifications_screen.dart';
 
 class JobFinderHomeScreen extends StatefulWidget {
   const JobFinderHomeScreen({super.key});
@@ -34,14 +38,17 @@ class _JobFinderHomeScreenState extends State<JobFinderHomeScreen> {
       appBar: AppBar(
         title: Text(_getTitle(_selectedIndex)),
         actions: [
-          IconButton(
-            icon: Icon(Icons.notifications),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const _NotificationsView()),
+          Consumer<NotificationProvider>(
+            builder: (context, notificationProvider, _) {
+              return NotificationBadge(
+                child: const Icon(Icons.notifications),
+                onTap: () {
+                  Navigator.of(context).pushNamed('/job_finder/notifications');
+                },
               );
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: _pages[_selectedIndex],
@@ -1749,30 +1756,4 @@ class _ProfileViewState extends State<_ProfileView> {
   }
 }
 
-// Notifications View
-class _NotificationsView extends StatelessWidget {
-  const _NotificationsView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Notifications')),
-      body: ListView(
-        padding: EdgeInsets.all(16),
-        children: [
-          Card(
-            color: Colors.blue[50],
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            child: ListTile(
-              leading: Icon(Icons.notifications_active, color: Colors.blue),
-              title: Text('You have 2 new job matches!'),
-              subtitle: Text('Check out the latest recommended jobs.'),
-            ),
-          ),
-          // Add more notifications here
-        ],
-      ),
-    );
-  }
-}
+// Notifications are now handled by the NotificationsScreen in common/notifications_screen.dart
