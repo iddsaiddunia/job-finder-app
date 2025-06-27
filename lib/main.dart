@@ -82,6 +82,7 @@ class JobFinderApp extends StatelessWidget {
             appliedDate: args['applied_at'] as String?,
             profileId: args['profile_id'] as int?,
             applicationId: args['application_id'] as int?,
+            jobId: args['jobId'] as int?,
             feedbackCount: args['feedback_count'] as int?,
             feedbacks: args['feedbacks'] as List<dynamic>?,
           );

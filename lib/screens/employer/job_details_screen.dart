@@ -374,21 +374,36 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: items.map((item) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('• ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Expanded(
-              child: Text(
-                item,
-                style: const TextStyle(fontSize: 16),
+      children: items.map((item) {
+        // Handle different item types (String or Map)
+        String displayText;
+        if (item is String) {
+          displayText = item;
+        } else if (item is Map) {
+          // If it's a map, try to get a meaningful value to display
+          // Assuming the map has a 'name' or 'title' field, or use toString() as fallback
+          displayText = item['name'] ?? item['title'] ?? item['value'] ?? item.toString();
+        } else {
+          // For any other type, convert to string
+          displayText = item.toString();
+        }
+        
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('• ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text(
+                  displayText,
+                  style: const TextStyle(fontSize: 16),
+                ),
               ),
-            ),
-          ],
-        ),
-      )).toList(),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }

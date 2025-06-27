@@ -35,6 +35,7 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
   String _jobTitle = '';
   List<Map<String, dynamic>> _allApplicants = [];
   List<Map<String, dynamic>> _recommendedApplicants = [];
+  List<Map<String, dynamic>> _selectedApplicants = [];
   Map<String, dynamic>? _jobDetails;
   
   // Tab controller
@@ -43,7 +44,7 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _fetchJobAndApplicants();
   }
   
@@ -120,44 +121,12 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
         _jobDetails = jobResponse;
         _jobTitle = _jobDetails?['title'] ?? 'Unknown Job';
         
-        // Process recommended candidates
-        _recommendedApplicants = recommendedCandidates.map((candidate) => {
-          // Ensure we get the proper name from the candidate data
-          'name': candidate['name'] ?? candidate['full_name'] ?? candidate['username'] ?? 'Unknown',
-          'skills': _formatSkills(candidate['skills']),
-          'education': candidate['education'], // Pass raw education data
-          // Debug education data
-          '_debug_education': () {
-            print('DEBUG: Candidate education data: ${candidate['education']}');
-            return candidate['education'];
-          }(),
-          // Normalize match_score to a 0-5 scale for rating display
-          'rating': (candidate['match_score'] is num) 
-              ? (candidate['match_score'] * 5.0 / 100.0).clamp(0.0, 5.0) 
-              : (candidate['rating'] is num) 
-                  ? candidate['rating'].toDouble() 
-                  : 0.0,
-          'email': candidate['email'] ?? '',
-          'phone': candidate['phone'] ?? '',
-          'status': 'Recommended',
-          'id': candidate['id'],
-          'profile_id': candidate['profile_id'],
-          'application_id': candidate['id'], // Use id as application_id for recommended candidates
-          'resume_url': candidate['resume_url'],
-          'experience': candidate['experience'] ?? [],
-        }).toList();
-        
         // Process all applicants
         final List<dynamic> applicants = applicantsResponse['applicants'] ?? [];
         _allApplicants = applicants.map((applicant) => {
           'name': applicant['name'] ?? 'Unknown',
           'skills': _formatSkills(applicant['skills']),
           'education': applicant['education'], // Pass raw education data
-          // Debug education data
-          '_debug_education': () {
-            print('DEBUG: Applicant education data: ${applicant['education']}');
-            return applicant['education'];
-          }(),
           'rating': applicant['rating'] ?? 0.0,
           'email': applicant['email'] ?? '',
           'phone': applicant['phone'] ?? '',
@@ -169,7 +138,98 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
           'cover_letter': applicant['cover_letter'],
           'applied_at': applicant['applied_at'],
           'experience': applicant['experience'] ?? [],
+          'selected_for_next_step': applicant['selected_for_next_step'] ?? false,
+          'applicant_approved': applicant['applicant_approved'] ?? false,
+          'next_step_type': applicant['next_step_type'] ?? '',
+          'next_step_status': applicant['next_step_status'] ?? '',
+          'feedbacks': applicant['feedbacks'] ?? [],
+          'feedback_count': applicant['feedback_count'] ?? 0,
         }).toList();
+        
+        // Process recommended candidates - use the same structure as applicants
+        _recommendedApplicants = recommendedCandidates.map((candidate) {
+          // Find if this candidate has an existing application
+          final existingApplication = _allApplicants.firstWhere(
+            (app) => app['profile_id'] == candidate['profile_id'],
+            orElse: () => <String, dynamic>{},
+          );
+          
+          // If there's an existing application, use that data
+          if (existingApplication.isNotEmpty) {
+            return existingApplication;
+          }
+          
+          // Otherwise create a new entry with the same structure
+          return {
+            'name': candidate['name'] ?? candidate['full_name'] ?? candidate['username'] ?? 'Unknown',
+            'skills': _formatSkills(candidate['skills']),
+            'education': candidate['education'],
+            'rating': (candidate['match_score'] is num) 
+                ? (candidate['match_score'] * 5.0 / 100.0).clamp(0.0, 5.0) 
+                : (candidate['rating'] is num) 
+                    ? candidate['rating'].toDouble() 
+                    : 0.0,
+            'email': candidate['email'] ?? '',
+            'phone': candidate['phone'] ?? '',
+            'status': 'Recommended',
+            'id': candidate['id'],
+            'application_id': candidate['application_id'],
+            'profile_id': candidate['profile_id'],
+            'resume_url': candidate['resume_url'],
+            'experience': candidate['experience'] ?? [],
+            'selected_for_next_step': false,
+            'applicant_approved': false,
+            'next_step_type': '',
+            'next_step_status': '',
+            'cover_letter': null,
+            'applied_at': null,
+            'feedbacks': [],
+            'feedback_count': 0,
+          };
+        }).toList();
+        
+        // Debug: Print recommended applicant statuses
+        print('Recommended applicant statuses:');
+        for (var app in _recommendedApplicants) {
+          print('Recommended: ${app['name']}, Status: ${app['status']}, Selected: ${app['selected_for_next_step']}, Application ID: ${app['application_id']}');
+        }
+        
+        // Debug: Print all applicant statuses to see what we're working with
+        print('Applicant statuses:');
+        for (var app in _allApplicants) {
+          print('Applicant: ${app['name']}, Status: ${app['status']}, Selected: ${app['selected_for_next_step']}');
+        }
+        
+        // Debug: Print all applicant statuses to see what we're working with
+        print('Applicant statuses:');
+        for (var app in _allApplicants) {
+          print('Applicant: ${app['name']}, Status: ${app['status']}');
+        }
+        
+        // Filter selected applicants based on status values or selection flag
+        _selectedApplicants = _allApplicants.where((applicant) {
+          final status = applicant['status']?.toString().toUpperCase() ?? '';
+          final selectedForNextStep = applicant['selected_for_next_step'] == true;
+          
+          // Check for any status that indicates selection
+          final isSelected = 
+              status == 'HIRED' || 
+              status == 'INTERVIEW' || 
+              status.contains('HIRED') || 
+              status.contains('INTERVIEW') || 
+              status.contains('SELECTED') ||
+              selectedForNextStep;
+          
+          // Debug selected status
+          if (isSelected) {
+            print('Selected applicant found: ${applicant['name']} with status: $status, selected_for_next_step: $selectedForNextStep');
+          }
+          
+          return isSelected;
+        }).toList();
+        
+        // Debug: Print count of selected applicants
+        print('Selected applicants count: ${_selectedApplicants.length}');
       });
     } catch (e) {
       setState(() {
@@ -207,28 +267,43 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
                   skills: app['skills'],
                   education: app['education'],
                   rating: app['rating'],
-                  onTap: () => Navigator.pushNamed(
-                    context,
-                    '/employer/applicant_details',
-                    arguments: {
-                      'name': app['name'],
-                      'skills': app['skills'],
-                      'education': app['education'],
-                      'rating': app['rating'],
-                      'experience': app['experience'] ?? [],
-                      'email': app['email'] ?? '',
-                      'phone': app['phone'] ?? '',
-                      'status': app['status'] ?? '',
-                      'jobId': widget.jobId,
-                      'resume_url': app['resume_url'],
-                      'profile_id': app['profile_id'],
-                      'application_id': app['application_id'],
-                      'cover_letter': app['cover_letter'],
-                      'applied_at': app['applied_at'],
-                      'feedbacks': app['feedbacks'],
-                      'feedback_count': app['feedback_count'],
-                    },
-                  ),
+                  // Pass status information to the card
+                  status: app['status'],
+                  isSelected: app['selected_for_next_step'],
+                  applicantApproved: app['applicant_approved'],
+                  onTap: () async {
+                    // Navigate to applicant details and wait for result
+                    final result = await Navigator.pushNamed(
+                      context,
+                      '/employer/applicant_details',
+                      arguments: {
+                        'name': app['name'],
+                        'skills': app['skills'],
+                        'education': app['education'],
+                        'rating': app['rating'],
+                        'experience': app['experience'] ?? [],
+                        'email': app['email'] ?? '',
+                        'phone': app['phone'] ?? '',
+                        'status': app['status'] ?? '',
+                        'jobId': widget.jobId,
+                        'resume_url': app['resume_url'],
+                        'profile_id': app['profile_id'],
+                        'application_id': app['application_id'],
+                        'cover_letter': app['cover_letter'],
+                        'applied_at': app['applied_at'],
+                        'feedbacks': app['feedbacks'],
+                        'feedback_count': app['feedback_count'],
+                        'selected_for_next_step': app['selected_for_next_step'],
+                        'applicant_approved': app['applicant_approved'],
+                        'next_step_type': app['next_step_type'],
+                      },
+                    );
+                    
+                    // If we got a result back (applicant was selected or rejected), refresh the data
+                    if (result == true) {
+                      _fetchJobAndApplicants();
+                    }
+                  },
                 )),
               ],
             ),
@@ -250,6 +325,7 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
           tabs: const [
             Tab(text: 'All Applicants'),
             Tab(text: 'Recommended'),
+            Tab(text: 'Selected'),
           ],
         ),
       ),
@@ -265,6 +341,9 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
                     
                     // Recommended Tab
                     _buildApplicantsTab(_recommendedApplicants, 'Recommended Applicants'),
+                    
+                    // Selected Tab
+                    _buildApplicantsTab(_selectedApplicants, 'Selected Applicants'),
                   ],
                 ),
     );

@@ -717,6 +717,51 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
   String? error;
   List<Map<String, dynamic>> _userApplications = []; // Store user's applications
 
+  // Helper methods for formatting application status
+  Color _getStatusColor(String status) {
+    switch(status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'shortlisted':
+        return Colors.blue;
+      case 'selected':
+      case 'approved':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+  
+  String _formatStatus(String status) {
+    // Capitalize first letter and format status for display
+    if (status.isEmpty) return 'Unknown';
+    return status[0].toUpperCase() + status.substring(1).toLowerCase();
+  }
+  
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+      
+      if (difference.inDays == 0) {
+        return 'Today';
+      } else if (difference.inDays == 1) {
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays} days ago';
+      } else if (difference.inDays < 30) {
+        return '${(difference.inDays / 7).floor()} weeks ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return dateStr; // Return original if parsing fails
+    }
+  }
+
   // Sample data for fallback
   final List<Map<String, String>> sampleJobs = [
       {
@@ -752,7 +797,7 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
   void initState() {
     super.initState();
     // Initialize the TabController with the correct vsync and length
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadJobs();
     _loadUserApplications();
   }
@@ -847,18 +892,35 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
     // Check if this job is in the user's applications
     final int? jobId = job['id'];
     bool hasApplied = false;
-    if (jobId != null && _userApplications.isNotEmpty) {
-      hasApplied = _userApplications.any((application) {
+    String? applicationStatus;
+    String? appliedDate;
+    
+    // Check if this job has application status directly (from Applied tab)
+    if (job.containsKey('application_status')) {
+      hasApplied = true;
+      applicationStatus = job['application_status']?.toString();
+      appliedDate = job['applied_at']?.toString();
+    }
+    // Otherwise check if it's in the user's applications list
+    else if (jobId != null && _userApplications.isNotEmpty) {
+      for (final application in _userApplications) {
         // Handle different job response formats
+        bool isMatch = false;
         if (application['job'] is Map) {
           // Job is a nested object with id field
-          return application['job']['id'] == jobId;
+          isMatch = application['job']['id'] == jobId;
         } else if (application['job'] is int) {
           // Job is just the ID
-          return application['job'] == jobId;
+          isMatch = application['job'] == jobId;
         }
-        return false;
-      });
+        
+        if (isMatch) {
+          hasApplied = true;
+          applicationStatus = application['status']?.toString();
+          appliedDate = application['applied_at']?.toString();
+          break;
+        }
+      }
     }
     
     return Card(
@@ -945,56 +1007,98 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
               ],
             ),
             SizedBox(height: 8),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    salary,
-                    style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w600, fontSize: 12),
-                  ),
-                ),
-                if (hasApplied)
-                  Container(
-                    margin: EdgeInsets.only(left: 8),
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.blue[200]!),
-                    ),
+                // Application status and date row (only shown if applied)
+                if (hasApplied && applicationStatus != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle, color: Colors.blue, size: 12),
-                        SizedBox(width: 4),
-                        Text(
-                          'Applied',
-                          style: TextStyle(color: Colors.blue[700], fontWeight: FontWeight.w600, fontSize: 11),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _getStatusColor(applicationStatus).withAlpha(40),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _formatStatus(applicationStatus),
+                            style: TextStyle(
+                              color: _getStatusColor(applicationStatus),
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
+                        if (appliedDate != null) ...[
+                          SizedBox(width: 8),
+                          Text(
+                            'Applied: ${_formatDate(appliedDate)}',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                Spacer(),
-                SizedBox(
-                  height: 28,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.deepPurple),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: EdgeInsets.symmetric(horizontal: 10),
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withAlpha(30),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        salary,
+                        style: TextStyle(
+                          color: Colors.deepPurple[700],
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
-                    onPressed: () => Navigator.pushNamed(
-                      context, 
-                      '/job_finder/job_details',
-                      arguments: job,
-                    ),
-                    child: Text('View', style: TextStyle(fontSize: 12)),
-                  ),
+                    Spacer(),
+                    if (hasApplied)
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/job_finder/job_details',
+                            arguments: job,
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[700],
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                          minimumSize: Size(0, 32),
+                          textStyle: TextStyle(fontSize: 13),
+                        ),
+                        child: Text('View'),
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/job_finder/job_details',
+                            arguments: job,
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                          minimumSize: Size(0, 32),
+                          textStyle: TextStyle(fontSize: 13),
+                        ),
+                        child: Text('Apply'),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -1125,6 +1229,7 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
             tabs: [
               Tab(text: 'All Jobs'),
               Tab(text: 'Recommended'),
+              Tab(text: 'Applied'),
             ],
           ),
         ),
@@ -1195,6 +1300,71 @@ class _JobListingsViewState extends State<_JobListingsView> with SingleTickerPro
                       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       itemCount: filteredRecommendedJobs.length,
                       itemBuilder: (context, index) => _buildJobCard(filteredRecommendedJobs[index], context),
+                    ),
+                    
+                // Applied Jobs Tab
+                _userApplications.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.work_outline, color: Colors.grey[400], size: 48),
+                          SizedBox(height: 16),
+                          Text(
+                            'No job applications yet',
+                            style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Jobs you apply to will appear here',
+                            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => _tabController?.animateTo(0),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepPurple,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            ),
+                            child: Text('Browse Jobs'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: _userApplications.length,
+                      itemBuilder: (context, index) {
+                        final application = _userApplications[index];
+                        final jobData = application['job'];
+                        
+                        // Handle different job response formats
+                        Map<String, dynamic> jobDetails;
+                        if (jobData is Map) {
+                          // Job is already a map with details
+                          jobDetails = Map<String, dynamic>.from(jobData);
+                        } else {
+                          // Find the job in allJobs by ID
+                          final jobId = jobData;
+                          final matchingJob = allJobs.firstWhere(
+                            (job) => job['id'] == jobId,
+                            orElse: () => <String, dynamic>{
+                              'title': 'Job #$jobId',
+                              'company_name': 'Unknown',
+                              'location': 'Unknown',
+                            },
+                          );
+                          jobDetails = matchingJob;
+                        }
+                        
+                        // Add application status to the job details
+                        jobDetails['application_status'] = application['status'];
+                        jobDetails['applied_at'] = application['applied_at'];
+                        
+                        return _buildJobCard(jobDetails, context);
+                      },
                     ),
               ],
             ),

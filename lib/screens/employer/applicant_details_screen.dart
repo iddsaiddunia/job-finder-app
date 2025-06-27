@@ -22,8 +22,12 @@ class ApplicantDetailsScreen extends StatefulWidget {
   final String? appliedDate;
   final int? profileId;
   final int? applicationId;
+  final int? jobId;
   final int? feedbackCount;
   final List<dynamic>? feedbacks;
+  final bool? selectedForNextStep;
+  final bool? applicantApproved;
+  final String? nextStepType;
 
   const ApplicantDetailsScreen({
     super.key,
@@ -40,8 +44,12 @@ class ApplicantDetailsScreen extends StatefulWidget {
     this.appliedDate,
     this.profileId,
     this.applicationId,
+    this.jobId,
     this.feedbackCount,
     this.feedbacks,
+    this.selectedForNextStep,
+    this.applicantApproved,
+    this.nextStepType,
   });
 
   @override
@@ -53,10 +61,13 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
   bool _isLoading = false;
   bool _isFeedbackLoading = false;
   final JobService _jobService = JobService();
-  double _rating = 0;
-  final TextEditingController _feedbackController = TextEditingController();
   List<dynamic> _allFeedbacks = [];
   double _averageRating = 0.0;
+  bool _applicantApproved = false;
+  String _employerNotes = '';
+  final TextEditingController _notesController = TextEditingController();
+  String _nextStepType = '';
+  bool _isSelectedApplicant = false;
   
   /// Builds a widget to display education details with improved visual design
   /// Prioritizes showing education level and field for better matching
@@ -331,34 +342,141 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _currentStatus = widget.status;
-    _loadSavedStatus();
+    
+    // Initialize status information from route arguments
+    _currentStatus = widget.status ?? '';
+    _isSelectedApplicant = widget.selectedForNextStep ?? false;
+    _applicantApproved = widget.applicantApproved ?? false;
+    _nextStepType = widget.nextStepType ?? '';
+    
+    // Load feedback data
     _loadAllFeedbacks();
+    
+    // Load application details if we have an application ID
+    if (widget.applicationId != null) {
+      _loadApplicationDetails();
+    } else if (widget.profileId != null && widget.jobId != null) {
+      // Try to find application by profile ID and job ID
+      _loadApplicationDetailsByProfileId();
+    }
 
-    // Debug application ID
-    print('Application ID in ApplicantDetailsScreen: ${widget.applicationId}');
-    print('Application ID type: ${widget.applicationId?.runtimeType}');
+    // Debug info
+    print('ApplicantDetailsScreen initialized with:');
+    print('- Application ID: ${widget.applicationId}');
+    print('- Profile ID: ${widget.profileId}');
+    print('- Status: ${widget.status}');
+    print('- Selected: ${widget.selectedForNextStep}');
+    print('- Approved: ${widget.applicantApproved}');
+  }
+  
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+  
+  // Load application details using application ID
+  Future<void> _loadApplicationDetails() async {
+    if (widget.applicationId == null) return;
+    
+    try {
+      final response = await _jobService.getApplicationDetails(widget.applicationId!);
+      
+      setState(() {
+        _applicantApproved = response['applicant_approved'] ?? false;
+        _employerNotes = response['recruiter_notes'] ?? '';
+        _nextStepType = response['next_step_type'] ?? '';
+        _isSelectedApplicant = response['selected_for_next_step'] ?? false;
+        _notesController.text = _employerNotes;
+        _currentStatus = response['status'] ?? '';
+      });
+    } catch (e) {
+      print('Error loading application details: $e');
+    }
+  }
+  
+  // Load application details by profile ID and job ID
+  Future<void> _loadApplicationDetailsByProfileId() async {
+    if (widget.profileId == null || widget.jobId == null) return;
+    
+    try {
+      // Get all applications for this job
+      final applications = await _jobService.getJobApplications(widget.jobId!);
+      
+      // Find if this profile has an application
+      for (var application in applications) {
+        if (application['seeker'] == widget.profileId) {
+          // Found an application for this profile
+          setState(() {
+            _applicantApproved = application['applicant_approved'] ?? false;
+            _employerNotes = application['recruiter_notes'] ?? '';
+            _nextStepType = application['next_step_type'] ?? '';
+            _isSelectedApplicant = application['selected_for_next_step'] ?? false;
+            _notesController.text = _employerNotes;
+            _currentStatus = application['status'] ?? '';
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      print('Error checking for existing application: $e');
+    }
+  }
+  
+  // Update employer notes for the application
+  Future<void> _updateEmployerNotes() async {
+    if (widget.applicationId == null) return;
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      // Get the current notes from the text controller
+      final notes = _notesController.text.trim();
+      
+      // Call the API to update the application with the new notes
+      await _jobService.setApplicationNextStep(
+        applicationId: widget.applicationId!,
+        nextStepType: _nextStepType.isEmpty ? (_currentStatus == 'HIRED' ? 'DIRECT_HIRE' : 'INTERVIEW') : _nextStepType,
+        recruiterNotes: notes,
+      );
+      
+      setState(() {
+        _employerNotes = notes;
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Notes updated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating notes: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _loadAllFeedbacks() async {
     if (widget.profileId == null) {
-      print('DEBUG: Cannot load feedback - profileId is null');
       return;
     }
 
-    print('DEBUG: Loading feedback for profile ID: ${widget.profileId}');
     setState(() {
       _isFeedbackLoading = true;
     });
 
     try {
       final feedbackData = await _jobService.getSeekerFeedback(widget.profileId!);
-      print('DEBUG: Feedback data received: $feedbackData');
       
       final feedbacks = feedbackData['feedbacks'] ?? [];
       final avgRating = (feedbackData['average_rating'] ?? 0.0).toDouble();
-      
-      print('DEBUG: Loaded ${feedbacks.length} feedbacks with average rating $avgRating');
       
       setState(() {
         _allFeedbacks = feedbacks;
@@ -366,45 +484,22 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
         _isFeedbackLoading = false;
       });
     } catch (e) {
-      print('ERROR: Failed to load feedback: $e');
       setState(() {
         _isFeedbackLoading = false;
       });
       
-      // Only show error if this is not the initial load
-      if (_allFeedbacks.isNotEmpty) {
+      if (_allFeedbacks.isNotEmpty && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not refresh feedback: ${e.toString().split("Exception:").last}'),
-            backgroundColor: Colors.orange,
+            content: Text('Failed to refresh feedback'),
+            backgroundColor: Colors.red,
           ),
         );
       }
     }
   }
 
-  // Load saved application status from SharedPreferences
-  Future<void> _loadSavedStatus() async {
-    if (widget.applicationId == null) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedStatus = prefs.getString('application_status_${widget.applicationId}');
-
-      if (savedStatus != null) {
-        print('Loaded saved status for application ${widget.applicationId}: $savedStatus');
-        setState(() => _currentStatus = savedStatus);
-      } else {
-        // Fall back to the status passed in from navigation args
-        setState(() => _currentStatus = widget.status);
-      }
-
-      print('Current status after loading: $_currentStatus');
-    } catch (e) {
-      print('Error loading saved status: $e');
-      setState(() => _currentStatus = widget.status);
-    }
-  }
+  // No longer needed - status is now passed directly via route arguments
 
   // Save application status to SharedPreferences
   Future<void> _saveStatus(String status) async {
@@ -413,9 +508,7 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('application_status_${widget.applicationId}', status);
-      print('Saved status for application ${widget.applicationId}: $status');
     } catch (e) {
-      print('Error saving status: $e');
     }
   }
 
@@ -437,7 +530,6 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
       );
     }
 
-    print('DEBUG: Building feedback section with ${feedbacks.length} feedbacks');
     if (feedbacks.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -473,32 +565,21 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
       itemCount: feedbacks.length,
       itemBuilder: (context, index) {
         final feedback = feedbacks[index];
-        print('DEBUG: Rendering feedback item: $feedback');
         
-        // Handle different feedback formats safely with detailed debugging
-        print('DEBUG: Raw feedback item: $feedback');
-        print('DEBUG: Feedback keys: ${feedback.keys.toList()}');
-        
-        // Handle rating that could be either a num or a String
         double rating = 0.0;
         if (feedback['rating'] != null) {
           if (feedback['rating'] is num) {
             rating = (feedback['rating'] as num).toDouble();
           } else if (feedback['rating'] is String) {
-            // Try to parse the string to a double
             rating = double.tryParse(feedback['rating'] as String) ?? 0.0;
           }
         }
-        print('DEBUG: Rating: $rating');
         
-        // Check if comment exists and its type
         final hasComment = feedback.containsKey('comment');
         final commentValue = feedback['comment'];
         final commentType = commentValue?.runtimeType;
-        print('DEBUG: Has comment key: $hasComment, Comment value: $commentValue, Type: $commentType');
         
         final comment = hasComment ? (commentValue?.toString() ?? '') : '';
-        print('DEBUG: Processed comment: "$comment"');
         
         final date = feedback['created_at'] as String? ?? '';
         final recruiterName = feedback['recruiter_name'] as String? ?? 'Unknown';
@@ -513,7 +594,7 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
             border: Border.all(color: Colors.grey[300]!),
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withAlpha(26),
                 spreadRadius: 1,
                 blurRadius: 2,
                 offset: const Offset(0, 1),
@@ -592,88 +673,31 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _feedbackController.dispose();
-    super.dispose();
-  }
-  
-  // Show dialog to select next step type (interview or direct hire) or reject
-  void _showNextStepDialog(bool isSelect) {
+  // Fetch job details to get the predefined next step
+  Future<void> _fetchJobNextStepAndProcess(bool isSelect) async {
     if (!isSelect) {
-      // If rejecting, show confirmation dialog
+      final TextEditingController notesController = TextEditingController();
+      
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Reject Applicant'),
-          content: const Text('Are you sure you want to reject this applicant?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _updateApplicationStatus('REJECTED');
-              },
-              child: const Text('Reject', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-    
-    // If selecting, show next step options
-    String selectedNextStep = 'INTERVIEW'; // Default
-    int? jobDurationDays;
-    
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Select Next Step'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Choose the next step for this applicant:'),
+              const Text('Are you sure you want to reject this applicant?'),
               const SizedBox(height: 16),
-              
-              // Radio buttons for next step options
-              RadioListTile<String>(
-                title: const Text('Interview'),
-                value: 'INTERVIEW',
-                groupValue: selectedNextStep,
-                onChanged: (value) {
-                  setState(() => selectedNextStep = value!);
-                },
-              ),
-              RadioListTile<String>(
-                title: const Text('Direct Hire'),
-                value: 'DIRECT_HIRE',
-                groupValue: selectedNextStep,
-                onChanged: (value) {
-                  setState(() => selectedNextStep = value!);
-                },
-              ),
-              
-              // Show job duration field only for direct hire
-              if (selectedNextStep == 'DIRECT_HIRE')
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Job Duration (days)',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) {
-                      jobDurationDays = int.tryParse(value);
-                    },
-                  ),
+              const Text('Optional: Add notes about this rejection'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(
+                  hintText: 'Reason for rejection, feedback, etc.',
+                  border: OutlineInputBorder(),
                 ),
+                maxLines: 3,
+              ),
             ],
           ),
           actions: [
@@ -684,18 +708,103 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                _setApplicationNextStep(selectedNextStep, jobDurationDays);
+                _updateApplicationStatus('REJECTED', notesController.text);
               },
-              child: const Text('Confirm', style: TextStyle(color: Colors.deepPurple)),
+              child: const Text('Reject', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      if (widget.jobId == null) {
+        throw Exception('Job ID is missing');
+      }
+      
+      final jobDetails = await _jobService.getJobDetails(widget.jobId!);
+      final predefinedNextStep = jobDetails['next_step'] ?? 'INTERVIEW'; // Default to INTERVIEW if not found
+      
+      if (mounted) {
+        setState(() => _isLoading = false);
+        
+        _showConfirmationDialog(predefinedNextStep);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching job details: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  // Show confirmation dialog with the predefined next step
+  void _showConfirmationDialog(String nextStepType) {
+    int? jobDurationDays;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Confirm Selection'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                nextStepType == 'DIRECT_HIRE'
+                  ? 'This applicant will be hired directly.'
+                  : 'This applicant will be scheduled for an interview.',
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              if (nextStepType == 'DIRECT_HIRE') ...[  
+                const Text('Job Duration (days):'),
+                const SizedBox(height: 8),
+                TextField(
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter job duration in days',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      jobDurationDays = int.tryParse(value);
+                    });
+                  },
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _setApplicationNextStep(nextStepType, jobDurationDays);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm'),
             ),
           ],
         ),
       ),
     );
   }
-  
+
   // Update application status (reject)
-  Future<void> _updateApplicationStatus(String status) async {
+  Future<void> _updateApplicationStatus(String status, [String? recruiterNotes]) async {
     if (widget.applicationId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error: Application ID not found')),
@@ -706,11 +815,10 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
     setState(() => _isLoading = true);
     
     try {
-      // This is a simplified approach - in a real app, you'd have an API endpoint to update status
-      // For now, we'll use the next step API with a rejected status
       await _jobService.setApplicationNextStep(
         applicationId: widget.applicationId!,
-        nextStepType: 'REJECTED', // This isn't a real next step type, but for demonstration
+        nextStepType: 'REJECTED',
+        recruiterNotes: recruiterNotes?.trim(),
       );
       
       setState(() {
@@ -718,25 +826,34 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
         _isLoading = false;
       });
       
-      // Save the rejected status to SharedPreferences
       await _saveStatus('REJECTED');
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Applicant rejected successfully')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Applicant rejected successfully'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
   
   // Set application next step (interview or direct hire)
   Future<void> _setApplicationNextStep(String nextStepType, int? jobDurationDays) async {
-    // Debug application ID before using it
-    print('Setting next step for application ID: ${widget.applicationId}');
-    
     if (widget.applicationId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error: Application ID not found')),
@@ -775,6 +892,9 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Applicant ${nextStepType == 'DIRECT_HIRE' ? 'hired' : 'selected for interview'} successfully')),
       );
+      
+      // Pop with result to trigger refresh in the applicant list screen
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -784,137 +904,10 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
   }
 
   // Show dialog to add rating and feedback for an approved applicant
-  void _showFeedbackDialog() {
-    // Reset rating and feedback for new submission
-    _rating = 0;
-    _feedbackController.clear();
-    
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Rate & Give Feedback'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('How would you rate this applicant?'),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        5,
-                        (index) => IconButton(
-                          icon: Icon(
-                            index < _rating ? Icons.star : Icons.star_border,
-                            color: Colors.amber,
-                            size: 32,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _rating = index + 1.0;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text('Your feedback:'),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _feedbackController,
-                      decoration: const InputDecoration(
-                        hintText: 'Share your experience working with this applicant...',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 5,
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: _rating == 0
-                      ? null
-                      : () {
-                          Navigator.of(context).pop();
-                          _submitFeedback();
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber[700],
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Submit'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
+  // Feedback dialog removed as it's no longer needed
   
   // Submit feedback and rating to the backend
-  void _submitFeedback() async {
-    if (_rating == 0 || widget.profileId == null || widget.applicationId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide a rating')),
-      );
-      return;
-    }
-    
-    setState(() {
-      _isLoading = true;
-    });
-    
-    try {
-      print('DEBUG: Submitting feedback for application ${widget.applicationId} with rating $_rating');
-      final result = await _jobService.submitApplicantFeedback(
-        applicationId: widget.applicationId!,
-        profileId: widget.profileId!,
-        rating: _rating,
-        comment: _feedbackController.text.trim(),
-      );
-      
-      print('DEBUG: Feedback submission result: $result');
-      
-      // Close the dialog
-      Navigator.of(context).pop();
-      
-      // Reset the form
-      _rating = 0;
-      _feedbackController.clear();
-      
-      // Reload the feedback data
-      _loadAllFeedbacks();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Feedback submitted successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      print('DEBUG: Error submitting feedback: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error submitting feedback: ${e.toString().split("Exception:").last}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
+  // Feedback submission method removed as it's no longer needed
 
   @override
   Widget build(BuildContext context) {
@@ -1230,64 +1223,194 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
               ? const Center(child: CircularProgressIndicator())
               : Column(
                 children: [
-                  Row(
+                  // Show applicant approval status for selected applicants
+                  if (_isSelectedApplicant || _currentStatus == 'HIRED' || _currentStatus == 'INTERVIEW')
+                    Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                const Text('Applicant Approval Status', 
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: _applicantApproved ? Colors.green.shade100 : Colors.orange.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: _applicantApproved ? Colors.green : Colors.orange,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _applicantApproved ? 'Approved' : 'Pending Approval',
+                                    style: TextStyle(
+                                      color: _applicantApproved ? Colors.green.shade800 : Colors.orange.shade800,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _nextStepType == 'DIRECT_HIRE'
+                                ? 'This applicant has been selected for direct hire.'
+                                : 'This applicant has been selected for interview.',
+                              style: const TextStyle(fontSize: 15),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _applicantApproved
+                                ? 'The applicant has approved this selection.'
+                                : 'Waiting for applicant to approve this selection.',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontStyle: _applicantApproved ? FontStyle.normal : FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                  // Notes section for selected applicants
+                  if (_isSelectedApplicant || _currentStatus == 'HIRED' || _currentStatus == 'INTERVIEW')
+                    Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Employer Notes', 
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                            const SizedBox(height: 12),
+                            
+                            // Notes section - always show existing notes
+                            if (_employerNotes.isNotEmpty)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text('Recruiter Notes:',
+                                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.blue)),
+                                        if (_applicantApproved)
+                                          const Padding(
+                                            padding: EdgeInsets.only(left: 8.0),
+                                            child: Chip(
+                                              label: Text('Approved by Applicant', 
+                                                style: TextStyle(fontSize: 11, color: Colors.white)),
+                                              backgroundColor: Colors.green,
+                                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(_employerNotes,
+                                      style: const TextStyle(fontSize: 15)),
+                                  ],
+                                ),
+                              ),
+                              
+                            // Only show notes editing if applicant hasn't approved yet
+                            if (!_applicantApproved) ...[  
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: _notesController,
+                                decoration: InputDecoration(
+                                  hintText: _nextStepType == 'DIRECT_HIRE'
+                                    ? 'Add notes about job details, start date, etc.'
+                                    : 'Add notes about interview details, date, location, etc.',
+                                  border: const OutlineInputBorder(),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
+                                ),
+                                maxLines: 4,
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _updateEmployerNotes(),
+                                  icon: const Icon(Icons.save, color: Colors.white),
+                                  label: const Text('Save Notes'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.deepPurple,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                  const SizedBox(height: 16),
+                  
+                  Column(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _isLoading || _isApplicantSelected ? null : () => _showNextStepDialog(true),
-                          icon: const Icon(Icons.check_circle, color: Colors.white),
-                          label: Text(_currentStatus == 'HIRED' || _currentStatus == 'INTERVIEW' 
-                            ? 'Selected' 
-                            : 'Select Applicant'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurple,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.deepPurple.withOpacity(0.5),
-                            disabledForegroundColor: Colors.white70,
+                      // Only show Select Applicant button if not rejected
+                      if (_currentStatus != 'REJECTED')
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            // Disable button if loading, already selected, or if isSelectedApplicant flag is true
+                            onPressed: _isLoading || _isApplicantSelected || _isSelectedApplicant ? null : () => _fetchJobNextStepAndProcess(true),
+                            icon: const Icon(Icons.check_circle, color: Colors.white),
+                            label: Text(_currentStatus == 'HIRED' || _currentStatus == 'INTERVIEW' || _isSelectedApplicant
+                              ? 'Selected' 
+                              : 'Select Applicant'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepPurple,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: Colors.deepPurple.withAlpha(128),
+                              disabledForegroundColor: Colors.white70,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 3,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _isLoading ? null : () => _fetchJobNextStepAndProcess(false),
+                          icon: Icon(Icons.close, color: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent),
+                          label: Text(_currentStatus == 'REJECTED' ? 'Rejected' : 'Reject'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent,
+                            side: BorderSide(color: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent),
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: _isLoading || _isApplicantSelected ? null : () => _showNextStepDialog(false),
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        label: Text(_currentStatus == 'REJECTED' ? 'Rejected' : 'Reject'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.redAccent.withOpacity(0.5),
-                          disabledForegroundColor: Colors.white70,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
                     ],
                   ),
-                  
-                  // Add feedback button only for selected applicants
-                  if (_isApplicantSelected) ...[  
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _showFeedbackDialog(),
-                        icon: const Icon(Icons.star_rate_rounded, size: 24),
-                        label: const Text('Rate & Give Feedback'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber.shade600,
-                          foregroundColor: Colors.white,
-                          elevation: 3,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
           ],

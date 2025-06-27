@@ -117,6 +117,24 @@ class JobService {
     }
   }
   
+  // Get application details by ID
+  Future<Map<String, dynamic>> getApplicationDetails(int applicationId) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/applications/$applicationId/');
+      final headers = await _getHeaders();
+      
+      final response = await http.get(url, headers: headers);
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to fetch application details: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching application details: $e');
+    }
+  }
+
   // Get job details by ID
   Future<Map<String, dynamic>> getJobDetails(int jobId) async {
     try {
@@ -161,6 +179,26 @@ class JobService {
     }
   }
 
+  // Get all applications for a specific job
+  Future<List<Map<String, dynamic>>> getJobApplications(int jobId) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/jobs/$jobId/applications/');
+      final headers = await _getHeaders();
+      
+      final response = await http.get(url, headers: headers);
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Failed to fetch job applications: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching job applications: $e');
+      throw Exception('Error fetching job applications: $e');
+    }
+  }
+  
   // Get user's applications (matches /api/applications/)
   Future<List<Map<String, dynamic>>> getApplications() async {
     try {
@@ -352,6 +390,7 @@ class JobService {
     required int applicationId,
     required String nextStepType,
     int? jobDurationDays,
+    String? recruiterNotes,
   }) async {
     try {
       final url = Uri.parse('${ApiConstants.baseUrl}/api/applications/$applicationId/next-step/');
@@ -360,6 +399,7 @@ class JobService {
       final requestData = {
         'next_step_type': nextStepType,
         if (jobDurationDays != null) 'job_duration_days': jobDurationDays,
+        if (recruiterNotes != null && recruiterNotes.isNotEmpty) 'recruiter_notes': recruiterNotes,
       };
       
       final response = await http.patch(

@@ -7,6 +7,9 @@ class ApplicantCard extends StatelessWidget {
   final dynamic education;
   final double rating;
   final VoidCallback? onTap;
+  final String? status;
+  final bool? isSelected;
+  final bool? applicantApproved;
 
   const ApplicantCard({
     super.key,
@@ -15,11 +18,59 @@ class ApplicantCard extends StatelessWidget {
     required this.education,
     required this.rating,
     this.onTap,
+    this.status,
+    this.isSelected,
+    this.applicantApproved,
   });
   
   /// Formats education data into a readable string
   /// Handles different formats: string, list, or JSON string
   /// Prioritizes showing education level and field for the card view
+  // Get status color based on application status and selection state
+  Color _getStatusColor() {
+    if (status == 'rejected') {
+      return Colors.red;
+    } else if (status == 'selected' || isSelected == true) {
+      return applicantApproved == true ? Colors.green : Colors.orange;
+    } else if (status == 'pending') {
+      return Colors.blue;
+    } else if (status == 'approved') {
+      return Colors.green;
+    } else {
+      return Colors.grey;
+    }
+  }
+  
+  // Get status icon based on application status and selection state
+  IconData _getStatusIcon() {
+    if (status == 'rejected') {
+      return Icons.cancel_outlined;
+    } else if (status == 'selected' || isSelected == true) {
+      return applicantApproved == true ? Icons.check_circle_outline : Icons.star_outline;
+    } else if (status == 'pending') {
+      return Icons.hourglass_empty;
+    } else if (status == 'approved') {
+      return Icons.check_circle_outline;
+    } else {
+      return Icons.info_outline;
+    }
+  }
+  
+  // Get status text based on application status and selection state
+  String _getStatusText() {
+    if (status == 'rejected') {
+      return 'Rejected';
+    } else if (status == 'selected' || isSelected == true) {
+      return applicantApproved == true ? 'Approved' : 'Selected';
+    } else if (status == 'pending') {
+      return 'Pending';
+    } else if (status == 'approved') {
+      return 'Approved';
+    } else {
+      return status ?? 'Applied';
+    }
+  }
+  
   String _formatEducation() {
     if (education == null) return 'No education data';
     
@@ -302,20 +353,62 @@ class ApplicantCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // View profile button
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: onTap,
-                  icon: const Icon(Icons.person_outline, size: 16),
-                  label: const Text('View Profile'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.deepPurple,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              // Status indicator if available
+              if (status != null || isSelected == true) ...[  
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Status badge
+                    if (status != null || isSelected == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor().withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _getStatusColor().withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(_getStatusIcon(), size: 14, color: _getStatusColor()),
+                            const SizedBox(width: 4),
+                            Text(
+                              _getStatusText(),
+                              style: TextStyle(fontSize: 12, color: _getStatusColor()),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // View profile button
+                    TextButton.icon(
+                      onPressed: onTap,
+                      icon: const Icon(Icons.person_outline, size: 16),
+                      label: const Text('View Profile'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.deepPurple,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[  // Fixed: Changed [] to ...[] for proper spread operator syntax
+                // View profile button only if no status
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: onTap,
+                    icon: const Icon(Icons.person_outline, size: 16),
+                    label: const Text('View Profile'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.deepPurple,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
