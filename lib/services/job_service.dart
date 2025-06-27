@@ -583,4 +583,44 @@ class JobService {
       throw Exception('Error getting seeker feedback: $e');
     }
   }
+  
+  // Update application status (for interview completion)
+  Future<Map<String, dynamic>> updateApplicationStatus({
+    required int applicationId,
+    required String status,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/applications/$applicationId/status/');
+      final headers = await _getHeaders();
+      
+      // Make sure headers include content-type for JSON
+      headers['Content-Type'] = 'application/json';
+      
+      final requestData = {
+        'status': status,
+      };
+      
+      print('DEBUG: Updating application status to $url');
+      print('DEBUG: Headers: $headers');
+      print('DEBUG: Request data: $requestData');
+      
+      final response = await http.patch(
+        url,
+        headers: headers,
+        body: jsonEncode(requestData),
+      );
+      
+      print('DEBUG: Status update response code: ${response.statusCode}');
+      print('DEBUG: Response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to update application status: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('ERROR: Exception in updateApplicationStatus: $e');
+      throw Exception('Error updating application status: $e');
+    }
+  }
 }

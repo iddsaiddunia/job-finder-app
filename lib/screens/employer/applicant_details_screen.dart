@@ -66,8 +66,10 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
   bool _applicantApproved = false;
   String _employerNotes = '';
   final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _feedbackController = TextEditingController();
   String _nextStepType = '';
   bool _isSelectedApplicant = false;
+  double _ratingValue = 3.0; // Default rating value
   
   /// Builds a widget to display education details with improved visual design
   /// Prioritizes showing education level and field for better matching
@@ -861,8 +863,9 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
       return;
     }
     
-    // Check if the applicant is already selected or rejected
-    if (_isApplicantSelected || _currentStatus == 'REJECTED') {
+    // Only check for already processed if not handling interview completion
+    // Allow interview completion (HIRED or REJECTED) even if already selected
+    if (_currentStatus != 'INTERVIEW' && _isApplicantSelected) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This applicant has already been processed')),
       );
@@ -879,26 +882,156 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
       );
       
       // Update the status based on the next step type
-      final newStatus = nextStepType == 'DIRECT_HIRE' ? 'HIRED' : 'INTERVIEW';
+      final newStatus = nextStepType == 'DIRECT_HIRE' || nextStepType == 'HIRED' 
+          ? 'HIRED' 
+          : nextStepType == 'INTERVIEW' 
+              ? 'INTERVIEW' 
+              : 'REJECTED';
       
       setState(() {
         _currentStatus = newStatus;
+        _nextStepType = nextStepType;
         _isLoading = false;
       });
       
       // Save the status to SharedPreferences
       await _saveStatus(newStatus);
       
+      String message;
+      if (nextStepType == 'DIRECT_HIRE' || nextStepType == 'HIRED') {
+        message = 'Applicant hired successfully';
+      } else if (nextStepType == 'INTERVIEW') {
+        message = 'Applicant selected for interview successfully';
+      } else {
+        message = 'Applicant rejected successfully';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Applicant ${nextStepType == 'DIRECT_HIRE' ? 'hired' : 'selected for interview'} successfully')),
+        SnackBar(content: Text(message)),
       );
       
-      // Pop with result to trigger refresh in the applicant list screen
-      Navigator.pop(context, true);
+      // Only pop if not completing an interview
+      if (nextStepType != 'HIRED' && nextStepType != 'REJECTED') {
+        // Pop with result to trigger refresh in the applicant list screen
+        Navigator.pop(context, true);
+      } else {
+        // Refresh application details
+        _loadApplicationDetails();
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+  
+  // Handle interview completion (pass/fail)
+  Future<void> _completeInterview(bool passed) async {
+    if (widget.applicationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Application ID not found')),
+      );
+      return;
+    }
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      final String status = passed ? 'HIRED' : 'REJECTED';
+      
+      await _jobService.updateApplicationStatus(
+        applicationId: widget.applicationId!,
+        status: status,
+      );
+      
+      setState(() {
+        _currentStatus = status;
+        _isLoading = false;
+      });
+      
+      // Save the status to SharedPreferences
+      await _saveStatus(status);
+      
+      String message = passed 
+          ? 'Applicant hired successfully' 
+          : 'Applicant rejected successfully';
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      
+      // Refresh application details
+      _loadApplicationDetails();
+      
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+  
+  // Submit feedback for a hired applicant
+  Future<void> _submitFeedback() async {
+    if (_feedbackController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please provide feedback comments'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    if (_ratingValue <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please provide a rating'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      await _jobService.submitApplicantFeedback(
+        applicationId: widget.applicationId!,
+        profileId: widget.profileId!,
+        rating: _ratingValue,
+        comment: _feedbackController.text,
+      );
+      
+      setState(() {
+        _isLoading = false;
+        _feedbackController.clear();
+      });
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Feedback submitted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      // Reload feedbacks
+      _loadAllFeedbacks();
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+      });
+      
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit feedback: $error'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -1370,8 +1503,140 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
                   
                   Column(
                     children: [
-                      // Only show Select Applicant button if not rejected
-                      if (_currentStatus != 'REJECTED')
+                      // Show interview completion buttons when applicant is in INTERVIEW status and has approved
+                      if (_currentStatus == 'INTERVIEW' && _applicantApproved)
+                        Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Interview Completion', 
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'Mark this interview as completed with the appropriate outcome:',
+                                  style: TextStyle(fontSize: 15),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: _isLoading ? null : () => _completeInterview(true),
+                                        icon: const Icon(Icons.check_circle, color: Colors.white),
+                                        label: const Text('Pass Interview'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: _isLoading ? null : () => _completeInterview(false),
+                                        icon: const Icon(Icons.cancel, color: Colors.red),
+                                        label: const Text('Reject'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                          side: const BorderSide(color: Colors.red),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        
+                      // Show feedback submission UI when applicant is hired
+                      if (_currentStatus == 'HIRED')
+                        Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Provide Feedback', 
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'Rate this applicant and provide feedback:',
+                                  style: TextStyle(fontSize: 15),
+                                ),
+                                const SizedBox(height: 16),
+                                
+                                // Rating slider
+                                Row(
+                                  children: [
+                                    const Text('Rating: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    Expanded(
+                                      child: Slider(
+                                        value: _ratingValue,
+                                        min: 0.0,
+                                        max: 5.0,
+                                        divisions: 10,
+                                        label: _ratingValue.toStringAsFixed(1),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _ratingValue = value;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 40,
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        _ratingValue.toStringAsFixed(1),
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                
+                                const SizedBox(height: 16),
+                                
+                                // Feedback text field
+                                TextField(
+                                  controller: _feedbackController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Feedback Comments',
+                                    hintText: 'Provide your feedback about this applicant',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  maxLines: 4,
+                                ),
+                                
+                                const SizedBox(height: 16),
+                                
+                                // Submit button
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isLoading ? null : _submitFeedback,
+                                    icon: const Icon(Icons.send, color: Colors.white),
+                                    label: const Text('Submit Feedback'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.deepPurple,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        
+                      // Only show Select Applicant button if not rejected and not in interview or hired status
+                      if (_currentStatus != 'REJECTED' && _currentStatus != 'INTERVIEW' && _currentStatus != 'HIRED')
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
@@ -1394,21 +1659,24 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
                           ),
                         ),
                       const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _isLoading ? null : () => _fetchJobNextStepAndProcess(false),
-                          icon: Icon(Icons.close, color: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent),
-                          label: Text(_currentStatus == 'REJECTED' ? 'Rejected' : 'Reject'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent,
-                            side: BorderSide(color: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      
+                      // Only show reject button if not already rejected, hired, or in interview
+                      if (_currentStatus != 'REJECTED' && _currentStatus != 'HIRED' && _currentStatus != 'INTERVIEW')
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _isLoading ? null : () => _fetchJobNextStepAndProcess(false),
+                            icon: Icon(Icons.close, color: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent),
+                            label: Text(_currentStatus == 'REJECTED' ? 'Rejected' : 'Reject'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent,
+                              side: BorderSide(color: _currentStatus == 'REJECTED' ? Colors.grey : Colors.redAccent),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ],
