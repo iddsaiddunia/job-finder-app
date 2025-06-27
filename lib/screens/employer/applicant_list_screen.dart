@@ -173,7 +173,9 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
             'phone': candidate['phone'] ?? '',
             'status': 'Recommended',
             'id': candidate['id'],
-            'application_id': candidate['application_id'],
+            // Check if application_id exists, otherwise use null
+            // This will prevent invalid application_id values
+            'application_id': candidate['application_id'] != null ? candidate['application_id'] : null,
             'profile_id': candidate['profile_id'],
             'resume_url': candidate['resume_url'],
             'experience': candidate['experience'] ?? [],

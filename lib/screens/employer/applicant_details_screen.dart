@@ -1503,6 +1503,51 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
                   
                   Column(
                     children: [
+                      // Special UI for recommended candidates without application IDs
+                      if (widget.applicationId == null && _currentStatus == 'Recommended')
+                        Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Recommended Candidate', 
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'This candidate has not applied to your job yet, but they match your job requirements.',
+                                  style: TextStyle(fontSize: 15),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: _isLoading ? null : () {
+                                          // Show message that this feature is coming soon
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Invite to apply feature coming soon')),
+                                          );
+                                          // Return to the previous screen with a result to refresh the list
+                                          Navigator.pop(context, true);
+                                        },
+                                        icon: const Icon(Icons.person_add, color: Colors.white),
+                                        label: const Text('Invite to Apply'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        
                       // Show interview completion buttons when applicant is in INTERVIEW status and has approved
                       if (_currentStatus == 'INTERVIEW' && _applicantApproved)
                         Card(
