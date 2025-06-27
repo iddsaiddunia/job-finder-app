@@ -34,60 +34,53 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   
   // Reactive lists using ValueNotifier
-  late ValueNotifier<List<Map<String, String>>> educations;
+  late ValueNotifier<List<Map<String, dynamic>>> educations;
   late ValueNotifier<List<String>> skills;
   late ValueNotifier<List<Map<String, String>>> experiences;
 
-  // Education levels and types
-  final Map<String, List<String>> _educationTypes = {
-    'No Education': ['None'],
-    'Ordinary Levels': ['O-Level', 'Secondary School'],
-    'Certificate': ['Professional Certificate', 'Technical Certificate', 'Online Certificate'],
-    'Diploma': ['Higher Diploma', 'Ordinary Diploma', 'Advanced Diploma'],
-    'Degree': ['Bachelor of Science', 'Bachelor of Arts', 'Bachelor of Engineering', 'Bachelor of Technology'],
-    'Masters': ['Master of Science', 'Master of Arts', 'Master of Business Administration', 'Master of Engineering'],
-    'PhD': ['Doctor of Philosophy', 'Doctor of Science', 'Doctor of Engineering'],
-  };
-
-  final List<String> _educationLevels = ['No Education', 'Ordinary Levels', 'Certificate', 'Diploma', 'Degree', 'Masters', 'PhD'];
-  
-  // Education fields across different disciplines
-  final List<String> _educationFields = [
-    'None',
-    'Computer Science',
-    'Information Technology',
-    'Software Engineering',
-    'Electrical Engineering',
-    'Mechanical Engineering',
-    'Civil Engineering',
-    'Business Administration',
-    'Finance',
-    'Accounting',
-    'Marketing',
-    'Human Resources',
-    'Medicine',
-    'Nursing',
-    'Pharmacy',
-    'Agriculture',
-    'Environmental Science',
-    'Biology',
-    'Chemistry',
-    'Physics',
-    'Mathematics',
-    'Statistics',
-    'Economics',
-    'Law',
-    'Education',
-    'Psychology',
-    'Sociology',
-    'Political Science',
-    'History',
-    'Geography',
-    'Languages',
-    'Arts',
-    'Architecture',
-    'Other',
+  // Education levels and fields - aligned with job posting form
+  final List<Map<String, String>> educationLevels = [
+    {'value': 'NONE', 'label': 'No Education Required'},
+    {'value': 'PRIMARY', 'label': 'Primary School'},
+    {'value': 'SECONDARY', 'label': 'Secondary School'},
+    {'value': 'CERTIFICATE', 'label': 'Certificate'},
+    {'value': 'DIPLOMA', 'label': 'Diploma'},
+    {'value': 'BACHELOR', 'label': 'Bachelor\'s Degree'},
+    {'value': 'MASTER', 'label': 'Master\'s Degree'},
+    {'value': 'PHD', 'label': 'PhD/Doctorate'},
   ];
+  
+  // Fields by education level - aligned with job posting form
+  final Map<String, List<String>> fieldsByLevel = {
+    'NONE': ['Not Applicable'],
+    'PRIMARY': ['General Education'],
+    'SECONDARY': ['General Education', 'Science', 'Arts', 'Commerce'],
+    'CERTIFICATE': [
+      'Information Technology', 'Business', 'Healthcare', 'Education',
+      'Engineering', 'Hospitality', 'Agriculture', 'Other'
+    ],
+    'DIPLOMA': [
+      'Information Technology', 'Business Administration', 'Accounting',
+      'Healthcare', 'Education', 'Engineering', 'Hospitality Management',
+      'Agriculture', 'Media Studies', 'Other'
+    ],
+    'BACHELOR': [
+      'Computer Science', 'Information Technology', 'Business Administration',
+      'Accounting', 'Finance', 'Marketing', 'Human Resources', 'Engineering',
+      'Medicine', 'Nursing', 'Education', 'Law', 'Agriculture',
+      'Environmental Science', 'Social Sciences', 'Arts', 'Other'
+    ],
+    'MASTER': [
+      'Computer Science', 'Information Technology', 'Business Administration (MBA)',
+      'Finance', 'Marketing', 'Human Resources', 'Engineering', 'Medicine',
+      'Public Health', 'Education', 'Law', 'Environmental Science',
+      'International Relations', 'Other'
+    ],
+    'PHD': [
+      'Computer Science', 'Information Technology', 'Business', 'Engineering',
+      'Medicine', 'Education', 'Law', 'Sciences', 'Humanities', 'Other'
+    ],
+  };
 
   @override
   void initState() {
@@ -259,13 +252,18 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
     }
   }
 
-  void _showAddEducationSheet(BuildContext context, {Map<String, String>? edu, int? idx}) {
-    String selectedLevel = edu?['level'] ?? _educationLevels.first;
-    String selectedType = edu?['type'] ?? '';
-    String selectedField = edu?['field'] ?? 'None';
+  void _showAddEducationSheet(BuildContext context, {Map<String, dynamic>? edu, int? idx}) {
+    // Default to BACHELOR if no level is selected
+    String selectedLevel = edu?['level'] ?? 'BACHELOR';
+    String? selectedField = edu?['field'];
     String institution = edu?['institution'] ?? '';
     String year = edu?['year'] ?? '';
     bool isSaving = false;
+
+    // Get available fields based on selected level
+    List<String> getAvailableFields(String level) {
+      return fieldsByLevel[level] ?? [];
+    }
 
     showModalBottomSheet(
       context: context,
@@ -290,28 +288,28 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
               DropdownButtonFormField<String>(
                 value: selectedLevel,
                 decoration: const InputDecoration(labelText: 'Education Level'),
-                items: _educationLevels.map((level) => DropdownMenuItem(value: level, child: Text(level))).toList(),
+                items: educationLevels.map((level) => DropdownMenuItem(
+                  value: level['value'],
+                  child: Text(level['label']!),
+                )).toList(),
                 onChanged: isSaving ? null : (value) {
                   setModalState(() {
                     selectedLevel = value!;
-                    selectedType = '';
+                    // Reset field when level changes
+                    selectedField = null;
                   });
                 },
               ),
               const SizedBox(height: 16),
-              if (_educationTypes[selectedLevel] != null)
-                DropdownButtonFormField<String>(
-                  value: selectedType.isEmpty ? null : selectedType,
-                  decoration: const InputDecoration(labelText: 'Education Type'),
-                  items: _educationTypes[selectedLevel]!.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
-                  onChanged: isSaving ? null : (value) => setModalState(() => selectedType = value ?? ''),
-                ),
-              const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: selectedField,
                 decoration: const InputDecoration(labelText: 'Field of Study'),
-                items: _educationFields.map((field) => DropdownMenuItem(value: field, child: Text(field))).toList(),
-                onChanged: isSaving ? null : (value) => setModalState(() => selectedField = value ?? 'None'),
+                items: getAvailableFields(selectedLevel).map((field) => 
+                  DropdownMenuItem(value: field, child: Text(field))
+                ).toList(),
+                onChanged: isSaving ? null : (value) => 
+                  setModalState(() => selectedField = value),
+                hint: const Text('Select field of study'),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -338,7 +336,7 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
                   const SizedBox(width: 10),
                   ElevatedButton(
                     onPressed: isSaving ? null : () async {
-                      if (institution.trim().isEmpty || year.trim().isEmpty) {
+                      if (selectedField == null || institution.trim().isEmpty || year.trim().isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please fill in all fields')),
                         );
@@ -348,12 +346,20 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
                       setModalState(() => isSaving = true);
                       
                       try {
+                        // Make sure selectedField is not null at this point
+                        if (selectedField == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please select a field of study')),
+                          );
+                          return;
+                        }
+                        
                         final newEdu = {
                           'level': selectedLevel,
-                          'type': selectedType,
-                          'field': selectedField, // Dedicated field for ML model compatibility
+                          'field': selectedField,
                           'institution': institution.trim(),
                           'year': year.trim(),
+                          'type': 'education', // Adding type for ML model compatibility
                         };
                         
                         final updated = [...educations.value];
@@ -881,7 +887,17 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
                                       Expanded(
                                         child: Text(
                                           educations.value.isNotEmpty 
-                                              ? educations.value.map((e) => "${e['level']} - ${e['institution']}").join(', ')
+                                              ? educations.value.map((e) {
+                                                  // Get the display label for the education level
+                                                  String levelDisplay = '';
+                                                  for (var levelMap in educationLevels) {
+                                                    if (levelMap['value'] == e['level']) {
+                                                      levelDisplay = levelMap['label']!;
+                                                      break;
+                                                    }
+                                                  }
+                                                  return "$levelDisplay - ${e['institution']}";
+                                                }).join(', ')
                                               : 'No education added',
                                           style: TextStyle(fontSize: 15, color: Colors.grey[700]),
                                           maxLines: 2,
@@ -943,7 +959,7 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        ValueListenableBuilder<List<Map<String, String>>>(
+                        ValueListenableBuilder<List<Map<String, dynamic>>>(
                           valueListenable: educations,
                           builder: (context, eduList, _) => eduList.isEmpty
                               ? const Padding(
@@ -954,6 +970,16 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
                                   children: eduList.asMap().entries.map((entry) {
                                     final idx = entry.key;
                                     final edu = entry.value;
+                                    
+                                    // Get the display label for the education level
+                                    String levelDisplay = '';
+                                    for (var levelMap in educationLevels) {
+                                      if (levelMap['value'] == edu['level']) {
+                                        levelDisplay = levelMap['label']!;
+                                        break;
+                                      }
+                                    }
+                                    
                                     return Card(
                                       margin: const EdgeInsets.only(bottom: 8),
                                       elevation: 1,
@@ -966,10 +992,10 @@ class _JobFinderProfileScreenState extends State<JobFinderProfileScreen> {
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
-                                                  Text(edu['level']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                                  if (edu['type']!.isNotEmpty) Text(edu['type']!, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                                                  if (edu['institution']!.isNotEmpty) Text(edu['institution']!, style: const TextStyle(fontSize: 13)),
-                                                  if (edu['year']!.isNotEmpty) Text(edu['year']!, style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                                                  Text(levelDisplay, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                                  Text('Field: ${edu['field']}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                                                  if (edu['institution'] != null) Text(edu['institution'], style: const TextStyle(fontSize: 13)),
+                                                  if (edu['year'] != null) Text(edu['year'], style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
                                                 ],
                                               ),
                                             ),

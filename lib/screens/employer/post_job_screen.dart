@@ -1,8 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import '../../services/api_constants.dart';
 import '../../services/token_storage.dart';
 import '../../services/job_service.dart';
 
@@ -22,7 +19,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _salaryMinController = TextEditingController();
   final _salaryMaxController = TextEditingController();
   final _locationController = TextEditingController();
-  final _requirementController = TextEditingController();
   final _benefitController = TextEditingController();
   final _recruitingSizeController = TextEditingController(text: '1');
   final _customSkillController = TextEditingController();
@@ -30,7 +26,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
   // State variables
   bool _isLoading = false;
   String? _errorMessage;
-  List<String> _requirements = [];
+  List<Map<String, dynamic>> _educationRequirements = [];
   List<String> _benefits = [];
   String _jobType = 'FULL_TIME';
   String _experienceLevel = 'ENTRY';
@@ -38,6 +34,86 @@ class _PostJobScreenState extends State<PostJobScreen> {
   DateTime? _applicationDeadline;
   String _nextStep = 'INTERVIEW';
   List<String> _selectedSkills = [];
+  
+  // Education level and field variables
+  String _selectedEducationLevel = 'BACHELOR';
+  String? _selectedField;
+  
+  // Education levels
+  final List<Map<String, String>> educationLevels = [
+    {'value': 'NONE', 'label': 'No Education Required'},
+    {'value': 'PRIMARY', 'label': 'Primary School'},
+    {'value': 'SECONDARY', 'label': 'Secondary School'},
+    {'value': 'CERTIFICATE', 'label': 'Certificate'},
+    {'value': 'DIPLOMA', 'label': 'Diploma'},
+    {'value': 'BACHELOR', 'label': 'Bachelor\'s Degree'},
+    {'value': 'MASTER', 'label': 'Master\'s Degree'},
+    {'value': 'PHD', 'label': 'PhD/Doctorate'},
+  ];
+  
+  // Fields by education level
+  final Map<String, List<String>> fieldsByLevel = {
+    'NONE': ['Not Applicable'],
+    'PRIMARY': ['General Education'],
+    'SECONDARY': ['General Education', 'Science', 'Arts', 'Commerce'],
+    'CERTIFICATE': [
+      'Information Technology', 'Business', 'Healthcare', 'Education',
+      'Engineering', 'Hospitality', 'Agriculture', 'Other'
+    ],
+    'DIPLOMA': [
+      'Information Technology', 'Business Administration', 'Accounting',
+      'Healthcare', 'Education', 'Engineering', 'Hospitality Management',
+      'Agriculture', 'Media Studies', 'Other'
+    ],
+    'BACHELOR': [
+      'Computer Science', 'Information Technology', 'Business Administration',
+      'Accounting', 'Finance', 'Marketing', 'Human Resources', 'Engineering',
+      'Medicine', 'Nursing', 'Education', 'Law', 'Agriculture',
+      'Environmental Science', 'Social Sciences', 'Arts', 'Other'
+    ],
+    'MASTER': [
+      'Computer Science', 'Information Technology', 'Business Administration (MBA)',
+      'Finance', 'Marketing', 'Human Resources', 'Engineering', 'Medicine',
+      'Public Health', 'Education', 'Law', 'Environmental Science',
+      'International Relations', 'Other'
+    ],
+    'PHD': [
+      'Computer Science', 'Information Technology', 'Business', 'Engineering',
+      'Medicine', 'Education', 'Law', 'Sciences', 'Humanities', 'Other'
+    ],
+  };
+  
+  // Methods for handling education requirements
+  void _addEducationRequirement() {
+    if (_selectedField == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a field of study')),
+      );
+      return;
+    }
+    
+    final educationRequirement = {
+      'level': _selectedEducationLevel,
+      'field': _selectedField,
+    };
+    
+    setState(() {
+      _educationRequirements.add(educationRequirement);
+      // Reset field selection but keep the level
+      _selectedField = null;
+    });
+  }
+  
+  void _removeEducationRequirement(int index) {
+    setState(() {
+      _educationRequirements.removeAt(index);
+    });
+  }
+  
+  // Get available fields based on selected education level
+  List<String> get _availableFields {
+    return fieldsByLevel[_selectedEducationLevel] ?? [];
+  }
   
   // Constants from backend model
   final List<Map<String, String>> jobTypes = [
@@ -94,28 +170,13 @@ class _PostJobScreenState extends State<PostJobScreen> {
     _salaryMinController.dispose();
     _salaryMaxController.dispose();
     _locationController.dispose();
-    _requirementController.dispose();
     _benefitController.dispose();
     _recruitingSizeController.dispose();
     _customSkillController.dispose();
     super.dispose();
   }
   
-  void _addRequirement() {
-    final requirement = _requirementController.text.trim();
-    if (requirement.isNotEmpty && !_requirements.contains(requirement)) {
-      setState(() {
-        _requirements.add(requirement);
-        _requirementController.clear();
-      });
-    }
-  }
-  
-  void _removeRequirement(String requirement) {
-    setState(() {
-      _requirements.remove(requirement);
-    });
-  }
+
   
   void _addBenefit() {
     final benefit = _benefitController.text.trim();
@@ -182,9 +243,9 @@ class _PostJobScreenState extends State<PostJobScreen> {
       return;
     }
     
-    if (_requirements.isEmpty) {
+    if (_educationRequirements.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one requirement')),
+        const SnackBar(content: Text('Please add at least one education requirement')),
       );
       return;
     }
@@ -214,11 +275,23 @@ class _PostJobScreenState extends State<PostJobScreen> {
       final salaryMax = int.tryParse(_salaryMaxController.text.replaceAll(',', '')) ?? 0;
       final recruitingSize = int.tryParse(_recruitingSizeController.text) ?? 1;
       
+      // Process education requirements for the backend
+      List<Map<String, dynamic>> formattedRequirements = [];
+      
+      // Add education requirements with level and field
+      for (Map<String, dynamic> eduReq in _educationRequirements) {
+        formattedRequirements.add({
+          'type': 'education',
+          'level': eduReq['level'],
+          'field': eduReq['field']
+        });
+      }
+      
       // Format job data to match the updated backend serializer
       final jobData = {
         'title': _titleController.text,
         'description': _descriptionController.text,
-        'requirements': _requirements,
+        'requirements': formattedRequirements, // Updated to use structured requirements
         'salary_min': salaryMin,
         'salary_max': salaryMax,
         'job_type': _jobType,
@@ -229,7 +302,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         'benefits': _benefits,
         'recruiting_size': recruitingSize,
         'next_step': _nextStep,
-        'skills': _selectedSkills, // Added skills field
+        'skills': _selectedSkills,
       };
       
       // Use the JobService to create the job
@@ -548,7 +621,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    // Requirements
+                    // Education Requirements
                     Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(
@@ -560,7 +633,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Job Requirements',
+                              'Education Requirements',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -568,32 +641,74 @@ class _PostJobScreenState extends State<PostJobScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _requirementController,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Add Requirement',
-                                      border: OutlineInputBorder(),
-                                      hintText: 'e.g., Bachelor\'s degree',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                ElevatedButton(
-                                  onPressed: _addRequirement,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.deepPurple,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                  ),
-                                  child: const Text('Add'),
-                                ),
-                              ],
+                            
+                            // Education Level Dropdown
+                            DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(
+                                labelText: 'Education Level',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.school),
+                              ),
+                              value: _selectedEducationLevel,
+                              items: educationLevels.map((Map<String, String> level) {
+                                return DropdownMenuItem<String>(
+                                  value: level['value'],
+                                  child: Text(level['label']!),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedEducationLevel = newValue;
+                                    _selectedField = null; // Reset field when level changes
+                                  });
+                                }
+                              },
                             ),
                             const SizedBox(height: 16),
-                            if (_requirements.isNotEmpty)
+                            
+                            // Field Dropdown
+                            DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(
+                                labelText: 'Field of Study',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.book),
+                              ),
+                              value: _selectedField,
+                              hint: const Text('Select a field of study'),
+                              items: _availableFields.map((String field) {
+                                return DropdownMenuItem<String>(
+                                  value: field,
+                                  child: Text(field),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedField = newValue;
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Add Education Requirement Button
+                            Center(
+                              child: ElevatedButton.icon(
+                                onPressed: _addEducationRequirement,
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Education Requirement'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.deepPurple,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Display added education requirements
+                            if (_educationRequirements.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
@@ -602,24 +717,34 @@ class _PostJobScreenState extends State<PostJobScreen> {
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: _requirements.map((requirement) {
+                                  children: List.generate(_educationRequirements.length, (index) {
+                                    final req = _educationRequirements[index];
+                                    final levelLabel = educationLevels
+                                        .firstWhere((level) => level['value'] == req['level'])
+                                        ['label']!;
+                                    
                                     return Padding(
                                       padding: const EdgeInsets.symmetric(vertical: 4),
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.check, size: 16, color: Colors.green),
+                                          const Icon(Icons.school, size: 16, color: Colors.deepPurple),
                                           const SizedBox(width: 8),
-                                          Expanded(child: Text(requirement)),
+                                          Expanded(
+                                            child: Text(
+                                              '$levelLabel in ${req['field']}',
+                                              style: const TextStyle(fontWeight: FontWeight.w500),
+                                            ),
+                                          ),
                                           IconButton(
                                             icon: const Icon(Icons.remove_circle, size: 20, color: Colors.red),
                                             padding: EdgeInsets.zero,
                                             constraints: const BoxConstraints(),
-                                            onPressed: () => _removeRequirement(requirement),
+                                            onPressed: () => _removeEducationRequirement(index),
                                           ),
                                         ],
                                       ),
                                     );
-                                  }).toList(),
+                                  }),
                                 ),
                               ),
                           ],
@@ -627,6 +752,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    
+
                     
                     // Benefits
                     Card(

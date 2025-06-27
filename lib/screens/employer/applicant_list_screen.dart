@@ -126,6 +126,11 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
           'name': candidate['name'] ?? candidate['full_name'] ?? candidate['username'] ?? 'Unknown',
           'skills': _formatSkills(candidate['skills']),
           'education': candidate['education'], // Pass raw education data
+          // Debug education data
+          '_debug_education': () {
+            print('DEBUG: Candidate education data: ${candidate['education']}');
+            return candidate['education'];
+          }(),
           // Normalize match_score to a 0-5 scale for rating display
           'rating': (candidate['match_score'] is num) 
               ? (candidate['match_score'] * 5.0 / 100.0).clamp(0.0, 5.0) 
@@ -148,6 +153,11 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
           'name': applicant['name'] ?? 'Unknown',
           'skills': _formatSkills(applicant['skills']),
           'education': applicant['education'], // Pass raw education data
+          // Debug education data
+          '_debug_education': () {
+            print('DEBUG: Applicant education data: ${applicant['education']}');
+            return applicant['education'];
+          }(),
           'rating': applicant['rating'] ?? 0.0,
           'email': applicant['email'] ?? '',
           'phone': applicant['phone'] ?? '',

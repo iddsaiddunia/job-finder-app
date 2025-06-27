@@ -1,109 +1,101 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 
 class ApplicantProfileCard extends StatelessWidget {
   final String name;
-  final String skills;
-  final dynamic education;
   final double rating;
 
   const ApplicantProfileCard({
     super.key,
     required this.name,
-    required this.skills,
-    required this.education,
     required this.rating,
   });
   
-  /// Formats education data into a readable string
-  /// Handles different formats: string, list, or JSON string
-  String _formatEducation() {
-    if (education == null) return '';
-    
-    try {
-      // If it's already a string and not JSON, return as is
-      if (education is String && !education.toString().trim().startsWith('[')) {
-        return education.toString();
-      }
-      
-      // Parse education data
-      List<dynamic> educationList;
-      if (education is String) {
-        // Try to parse as JSON
-        try {
-          educationList = jsonDecode(education);
-        } catch (e) {
-          return education;
-        }
-      } else if (education is List) {
-        educationList = education;
-      } else {
-        return education.toString();
-      }
-      
-      if (educationList.isEmpty) return '';
-      
-      // Format the most recent education entry (assuming the list is ordered with most recent first)
-      var recentEducation = educationList.first;
-      if (recentEducation is Map) {
-        final degree = recentEducation['degree'] ?? '';
-        final institution = recentEducation['institution'] ?? '';
-        final year = recentEducation['year'] ?? '';
-        
-        return '$degree${degree.isNotEmpty && institution.isNotEmpty ? ' at ' : ''}$institution${year.isNotEmpty ? ' ($year)' : ''}';
-      } else {
-        return recentEducation.toString();
-      }
-    } catch (e) {
-      // Fallback for any parsing errors
-      return education.toString();
-    }
+  // Build star rating display
+  Widget _buildRatingStars() {
+    return Row(
+      children: List.generate(
+        5,
+        (index) => Icon(
+          index < rating ? Icons.star : Icons.star_border,
+          color: Colors.amber,
+          size: 20,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
-      margin: EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: Colors.blueGrey.shade100,
-                  child: Icon(Icons.person, size: 40, color: Colors.blueGrey),
-                ),
-                SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 6),
-                      Text('Education: ${_formatEducation()}', style: TextStyle(fontSize: 15, color: Colors.grey[700])),
-                    ],
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.blue.shade50, Colors.blue.shade100],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Row(
+            children: [
+              // Avatar with gradient background
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.blue.shade300, Colors.purple.shade300],
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      spreadRadius: 1,
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            SizedBox(height: 14),
-            Text('Skills: $skills', style: TextStyle(fontSize: 16)),
-            SizedBox(height: 14),
-            Row(
-              children: [
-                Icon(Icons.star, color: Colors.amber, size: 22),
-                SizedBox(width: 6),
-                Text(rating.toStringAsFixed(1), style: TextStyle(fontSize: 16)),
-                SizedBox(width: 10),
-                Text('Rating', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
-              ],
-            ),
-          ],
+                child: CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.transparent,
+                  child: Icon(Icons.person, size: 50, color: Colors.white),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 24, 
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _buildRatingStars(),
+                        const SizedBox(width: 8),
+                        Text(
+                          rating.toStringAsFixed(1),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -58,80 +58,274 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
   List<dynamic> _allFeedbacks = [];
   double _averageRating = 0.0;
   
-  /// Builds a widget to display education details
+  /// Builds a widget to display education details with improved visual design
+  /// Prioritizes showing education level and field for better matching
   Widget _buildEducationDetails(dynamic education) {
-    if (education == null) return const Text('No education information available');
+    if (education == null) return _buildEmptyEducation();
     
     try {
-      // Parse education data
-      List<dynamic> educationList;
-      if (education is String) {
-        // If it's already a string and not JSON, display as is
-        if (!education.toString().trim().startsWith('[')) {
-          return Text(education.toString());
+      // Handle different education data formats
+      
+      // Case 1: Direct Map with level and field
+      if (education is Map) {
+        if (education.containsKey('level')) {
+          return _buildStructuredEducationList([education]);
         }
-        
+      }
+      
+      // Case 2: String that's not JSON
+      if (education is String && !education.toString().trim().startsWith('[') && 
+          !education.toString().trim().startsWith('{')) {
+        return _buildSimpleEducation(education.toString());
+      }
+      
+      // Case 3: List of education entries or JSON string
+      List<dynamic> educationList;
+      
+      if (education is String) {
         // Try to parse as JSON
         try {
-          educationList = jsonDecode(education);
+          final parsed = jsonDecode(education);
+          if (parsed is List) {
+            educationList = parsed;
+          } else if (parsed is Map) {
+            // Handle single education entry as JSON object
+            if (parsed.containsKey('level')) {
+              return _buildStructuredEducationList([parsed]);
+            }
+            // If it's a map but doesn't have level, treat as a list with one item
+            educationList = [parsed];
+          } else {
+            return _buildSimpleEducation(education.toString());
+          }
         } catch (e) {
-          return Text(education.toString());
+          return _buildSimpleEducation(education.toString());
         }
       } else if (education is List) {
         educationList = education;
       } else {
-        return Text(education.toString());
+        return _buildSimpleEducation(education.toString());
       }
       
-      if (educationList.isEmpty) return const Text('No education information available');
+      if (educationList.isEmpty) return _buildEmptyEducation();
       
-      // Display all education entries
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: educationList.map((edu) {
-          if (edu is Map) {
-            final degree = edu['degree'] ?? '';
-            final institution = edu['institution'] ?? '';
-            final year = edu['year'] ?? '';
-            final description = edu['description'] ?? '';
-            
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$degree${degree.isNotEmpty && institution.isNotEmpty ? ' at ' : ''}$institution',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                  ),
-                  if (year.isNotEmpty)
-                    Text(
-                      'Year: $year',
-                      style: TextStyle(color: Colors.grey[700], fontSize: 14),
-                    ),
-                  if (description.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        description,
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          } else {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(edu.toString()),
-            );
-          }
-        }).toList(),
-      );
+      // Check if we have structured education data with level and field
+      bool hasStructuredFormat = false;
+      for (var edu in educationList) {
+        if (edu is Map && edu.containsKey('level')) {
+          hasStructuredFormat = true;
+          break;
+        }
+      }
+      
+      if (hasStructuredFormat) {
+        return _buildStructuredEducationList(educationList);
+      } else {
+        return _buildLegacyEducationList(educationList);
+      }
     } catch (e) {
       // Fallback for any parsing errors
-      return Text(education.toString());
+      return _buildSimpleEducation('Error parsing education data');
     }
+  }
+  
+  /// Builds a widget for empty education data
+  Widget _buildEmptyEducation() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.school_outlined, color: Colors.grey),
+          SizedBox(width: 12),
+          Text('No education information available', style: TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+  
+  /// Builds a widget for simple text education data
+  Widget _buildSimpleEducation(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue[100]!),
+      ),
+      child: Text(text, style: TextStyle(fontSize: 15)),
+    );
+  }
+  
+  /// Builds a list of structured education entries (new format with level and field)
+  Widget _buildStructuredEducationList(List<dynamic> educationList) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: educationList.map((edu) {
+        if (edu is Map) {
+          final level = edu['level'] ?? '';
+          final field = edu['field'] ?? '';
+          final institution = edu['institution'] ?? '';
+          final year = edu['year'] ?? '';
+          final type = edu['type'] ?? '';
+          
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[100]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Education level and field (most important for matching)
+                Row(
+                  children: [
+                    Icon(Icons.school, color: Colors.blue[700], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$level${field.isNotEmpty ? ' in $field' : ''}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.blue[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                // Additional details
+                if (institution.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.location_on_outlined, color: Colors.grey[600], size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            institution,
+                            style: TextStyle(fontSize: 15, color: Colors.grey[800]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (type.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.category_outlined, color: Colors.grey[600], size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          type,
+                          style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (year.isNotEmpty)
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today_outlined, color: Colors.grey[600], size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        year,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          );
+        } else {
+          return _buildSimpleEducation(edu.toString());
+        }
+      }).toList(),
+    );
+  }
+  
+  /// Builds a list of legacy education entries (old format with degree and institution)
+  Widget _buildLegacyEducationList(List<dynamic> educationList) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: educationList.map((edu) {
+        if (edu is Map) {
+          final degree = edu['degree'] ?? '';
+          final institution = edu['institution'] ?? '';
+          final year = edu['year'] ?? '';
+          final description = edu['description'] ?? '';
+          
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.purple[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.purple[100]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.school, color: Colors.purple[700], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$degree${degree.isNotEmpty && institution.isNotEmpty ? ' at ' : ''}$institution',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.purple[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (year.isNotEmpty || description.isNotEmpty)
+                  const SizedBox(height: 8),
+                if (year.isNotEmpty)
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today_outlined, color: Colors.grey[600], size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Year: $year',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      ),
+                    ],
+                  ),
+                if (description.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      description,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[800]),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        } else {
+          return _buildSimpleEducation(edu.toString());
+        }
+      }).toList(),
+    );
   }
 
   @override
@@ -285,7 +479,16 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
         print('DEBUG: Raw feedback item: $feedback');
         print('DEBUG: Feedback keys: ${feedback.keys.toList()}');
         
-        final rating = feedback['rating'] != null ? (feedback['rating'] as num).toDouble() : 0.0;
+        // Handle rating that could be either a num or a String
+        double rating = 0.0;
+        if (feedback['rating'] != null) {
+          if (feedback['rating'] is num) {
+            rating = (feedback['rating'] as num).toDouble();
+          } else if (feedback['rating'] is String) {
+            // Try to parse the string to a double
+            rating = double.tryParse(feedback['rating'] as String) ?? 0.0;
+          }
+        }
         print('DEBUG: Rating: $rating');
         
         // Check if comment exists and its type
@@ -777,12 +980,64 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Basic profile information
+            // Basic profile information - simplified to only show avatar, name and rating
             ApplicantProfileCard(
               name: name,
-              skills: skills,
-              education: education,
               rating: rating,
+            ),
+            const SizedBox(height: 16),
+            
+            // Skills section in a separate styled container
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.purple.shade100),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.psychology, color: Colors.purple.shade700),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Skills',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: skills.split(',').map((skill) {
+                      final trimmedSkill = skill.trim();
+                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
+                      
+                      return Chip(
+                        label: Text(trimmedSkill),
+                        backgroundColor: Colors.purple.shade100,
+                        labelStyle: TextStyle(color: Colors.purple.shade800),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             

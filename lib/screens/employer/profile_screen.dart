@@ -352,7 +352,7 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
             TextField(
               controller: _websiteController,
               decoration: InputDecoration(labelText: 'Website', border: OutlineInputBorder()),
-              keyboardType: TextInputType.url,
+              // keyboardType: TextInputType.url,
             ),
             SizedBox(height: 16),
             Row(
@@ -372,17 +372,23 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
                 SizedBox(width: 10),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _addressController.text.isNotEmpty ? _addressController.text : null,
+                    value: _selectedRegion,
                     items: _tzRegions.map((region) => DropdownMenuItem(
                       value: region,
                       child: Text(region),
                     )).toList(),
                     onChanged: (val) {
-                      if (val != null) setState(() => _addressController.text = val);
+                      if (val != null) {
+                        setState(() {
+                          _selectedRegion = val;
+                          _addressController.text = val; // Update address with selected region
+                        });
+                      }
                     },
                     decoration: InputDecoration(
                       labelText: 'Region',
                       border: OutlineInputBorder(),
+                      hintText: 'Select region',
                     ),
                   ),
                 ),
@@ -435,10 +441,38 @@ class _EmployerProfileScreenState extends State<EmployerProfileScreen> {
               },
             ),
             SizedBox(height: 16),
-            TextField(
-              controller: _companySizeController,
-              decoration: InputDecoration(labelText: 'Company Size', border: OutlineInputBorder(), hintText: 'e.g. 1-10, 11-50, 51-200'),
+            DropdownButtonFormField<String>(
+              value: _selectedCompanySize,
+              items: _companySizes.map((size) => DropdownMenuItem(
+                value: size,
+                child: Text(size),
+              )).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedCompanySize = val;
+                    _companySizeController.text = val;
+                  });
+                }
+              },
+              decoration: InputDecoration(
+                labelText: 'Company Size',
+                border: OutlineInputBorder(),
+                hintText: 'Select company size',
+              ),
             ),
+            // Allow custom company size if needed
+            if (_selectedCompanySize == null && _companySizeController.text.isNotEmpty) ...[  
+              SizedBox(height: 10),
+              TextField(
+                controller: _companySizeController,
+                decoration: InputDecoration(
+                  labelText: 'Custom Company Size',
+                  border: OutlineInputBorder(),
+                  hintText: 'e.g. 1-10, 11-50, 51-200',
+                ),
+              ),
+            ],
             SizedBox(height: 16),
             TextField(
               controller: _descriptionController,
