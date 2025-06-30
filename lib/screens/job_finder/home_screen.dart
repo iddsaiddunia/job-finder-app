@@ -77,7 +77,7 @@ class _JobFinderHomeScreenState extends State<JobFinderHomeScreen> {
       case 3:
         return 'Profile';
       default:
-        return 'Job Finder';
+        return 'Job RS';
     }
   }
 }

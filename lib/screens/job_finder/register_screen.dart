@@ -127,7 +127,7 @@ class _JobFinderRegisterScreenState extends State<JobFinderRegisterScreen> {
                     Icon(Icons.person_add_alt_1, size: 64, color: Color(0xFF7C3AED)),
                     const SizedBox(height: 16),
                     Text(
-                      'Job Finder Registration',
+                      'Job RS Registration',
                       style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF4B006E)),
                     ),
                     const SizedBox(height: 8),

@@ -111,7 +111,7 @@ class _UnifiedRegisterFormState extends State<_UnifiedRegisterForm> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 8),
                         child: Row(
-                          children: [Icon(Icons.person), SizedBox(width: 8), Text('Job Finder')],
+                          children: [Icon(Icons.person), SizedBox(width: 8), Text('Job RS')],
                         ),
                       ),
                       Padding(

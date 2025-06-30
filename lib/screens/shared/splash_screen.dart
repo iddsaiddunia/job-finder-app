@@ -21,7 +21,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Text('Job Finder App', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+        child: Text('Job RS App', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
       ),
     );
   }

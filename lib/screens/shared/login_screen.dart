@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Icon(Icons.work_outline, size: 64, color: Color(0xFF7C3AED)),
                 const SizedBox(height: 16),
                 Text(
-                  'Job Finder',
+                  'Job RS',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,

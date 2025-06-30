@@ -37,7 +37,7 @@ class JobFinderApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Job Finder',
+      title: 'Job RS',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
@@ -47,7 +47,7 @@ class JobFinderApp extends StatelessWidget {
         '/': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
-        // Job Finder routes
+        // Job RS routes
         '/job_finder/home': (context) => JobFinderHomeScreen(),
         '/job_finder/profile': (context) => const JobFinderProfileScreen(),
         '/job_finder/job_listings': (context) => JobListingsScreen(),

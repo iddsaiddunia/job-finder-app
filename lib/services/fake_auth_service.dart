@@ -23,7 +23,7 @@ class FakeAuthService {
 
   // In-memory users: email -> {password, type, ...}
   final Map<String, Map<String, dynamic>> _users = {
-    // Demo Job Finder
+    // Demo Job RS
     'finder@example.com': {
       'password': 'password123',
       'type': UserType.jobFinder,
