@@ -268,39 +268,31 @@ class _ApplicantListScreenState extends State<ApplicantListScreen> with SingleTi
                   name: app['name'],
                   skills: app['skills'],
                   education: app['education'],
-                  rating: app['rating'],
-                  // Pass status information to the card
-                  status: app['status'],
+                  rating: app['rating'] ?? 0.0,
+                  status: app['status'] ?? app['application_status'],
                   isSelected: app['selected_for_next_step'],
                   applicantApproved: app['applicant_approved'],
+                  hasApplied: app['has_applied'],
+                  applicationStatus: app['application_status'],
+                  applicationId: app['application_id'],
                   onTap: () async {
-                    // Navigate to applicant details and wait for result
                     final result = await Navigator.pushNamed(
                       context,
                       '/employer/applicant_details',
                       arguments: {
-                        'name': app['name'],
-                        'skills': app['skills'],
-                        'education': app['education'],
-                        'rating': app['rating'],
-                        'experience': app['experience'] ?? [],
-                        'email': app['email'] ?? '',
-                        'phone': app['phone'] ?? '',
-                        'status': app['status'] ?? '',
-                        'jobId': widget.jobId,
-                        'resume_url': app['resume_url'],
-                        'profile_id': app['profile_id'],
+                        ...app,
+                        'status': app['status'] ?? app['application_status'] ?? '',
                         'application_id': app['application_id'],
-                        'cover_letter': app['cover_letter'],
-                        'applied_at': app['applied_at'],
-                        'feedbacks': app['feedbacks'],
                         'feedback_count': app['feedback_count'],
                         'selected_for_next_step': app['selected_for_next_step'],
                         'applicant_approved': app['applicant_approved'],
                         'next_step_type': app['next_step_type'],
+                        'has_applied': app['has_applied'],
+                        'application_status': app['application_status'],
+                        'jobId': widget.jobId,
+                        'profileId': app['profile_id'] ?? app['id'],
                       },
                     );
-                    
                     // If we got a result back (applicant was selected or rejected), refresh the data
                     if (result == true) {
                       _fetchJobAndApplicants();

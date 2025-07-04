@@ -4,6 +4,38 @@ import 'api_constants.dart';
 import 'token_storage.dart';
 
 class JobService {
+  /// Invite a job seeker to apply for a job (for recruiters)
+  Future<Map<String, dynamic>> inviteApplicantToJob({
+    required int jobId,
+    required int profileId,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/jobs/$jobId/invite/');
+      final headers = await _getHeaders();
+      final requestData = {'seeker_id': profileId};
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode(requestData),
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else if (response.statusCode == 400) {
+        try {
+          final errorData = jsonDecode(response.body);
+          if (errorData['detail'] != null) {
+            throw Exception(errorData['detail']);
+          }
+        } catch (_) {}
+        throw Exception('Failed to invite applicant: Bad request');
+      } else {
+        throw Exception('Failed to invite applicant: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error inviting applicant: $e');
+    }
+  }
+
   static final JobService _instance = JobService._internal();
   factory JobService() => _instance;
   JobService._internal();

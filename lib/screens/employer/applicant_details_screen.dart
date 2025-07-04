@@ -1047,6 +1047,7 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
     
     // Get arguments from Navigator if available
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    debugPrint('DEBUG: Navigation args = ' + (args?.toString() ?? 'null'));
     
     // Basic profile information
     final name = args?['name'] as String? ?? widget.applicantName;
@@ -1064,8 +1065,14 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
     final resumeUrl = args?['resume_url'] as String? ?? widget.resumeUrl;
     final coverLetter = args?['cover_letter'] as String? ?? widget.coverLetter;
     final appliedDate = args?['applied_at'] as String? ?? widget.appliedDate;
-    final profileId = args?['profile_id'] as int? ?? widget.profileId;
+    final profileId = args?['profileId'] as int? ?? args?['profile_id'] as int? ?? widget.profileId;
+    debugPrint('DEBUG: Resolved profileId = ' + (profileId?.toString() ?? 'null'));
+    final jobId = args?['jobId'] as int? ?? args?['job_id'] as int? ?? widget.jobId;
+    debugPrint('DEBUG: Resolved jobId = ' + (jobId?.toString() ?? 'null'));
     final applicationId = args?['application_id'] as int? ?? widget.applicationId;
+
+    // Use resolved profileId everywhere below
+
     // We don't need feedbackCount anymore as we're using the length of the feedback list
     final feedbacks = args?['feedbacks'] as List<dynamic>? ?? widget.feedbacks;
     
@@ -1520,17 +1527,52 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
                                   style: TextStyle(fontSize: 15),
                                 ),
                                 const SizedBox(height: 16),
-                                Row(
+                                if (applicationId == null) Row(
                                   children: [
                                     Expanded(
                                       child: ElevatedButton.icon(
-                                        onPressed: _isLoading ? null : () {
-                                          // Show message that this feature is coming soon
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('Invite to apply feature coming soon')),
-                                          );
-                                          // Return to the previous screen with a result to refresh the list
-                                          Navigator.pop(context, true);
+                                        onPressed: _isLoading ? null : () async {
+                                          setState(() => _isLoading = true);
+                                          try {
+                                            debugPrint('DEBUG: Pre-invite check: jobId=${jobId}, profileId=${profileId}');
+                                            if (jobId == null || profileId == null) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Job or Profile ID missing'), backgroundColor: Colors.red),
+                                              );
+                                              setState(() => _isLoading = false);
+                                              return;
+                                            }
+                                            debugPrint('DEBUG: Invite pressed with jobId=${jobId}, profileId=${profileId}');
+                                            await _jobService.inviteApplicantToJob(
+                                              jobId: jobId!,
+                                              profileId: profileId!,
+                                            );
+                                            // Refetch candidate data for this job
+                                            final recommendations = await _jobService.getCandidateRecommendations(jobId);
+                                            final updated = recommendations.firstWhere(
+                                              (c) => (c['profile_id'] == profileId || c['id'] == profileId),
+                                              orElse: () => <String, dynamic>{},
+                                            );
+                                            if (updated.isNotEmpty) {
+                                              setState(() {
+                                                _currentStatus = updated['application_status'] ?? 'INVITED';
+                                              });
+                                            } else {
+                                              setState(() {
+                                                _currentStatus = 'INVITED';
+                                              });
+                                            }
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Invite sent successfully!'), backgroundColor: Colors.green),
+                                            );
+                                            // Optionally refresh details
+                                            _loadApplicationDetailsByProfileId();
+                                          } catch (e) {
+                                            setState(() => _isLoading = false);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Failed to send invite: ${e.toString()}'), backgroundColor: Colors.red),
+                                            );
+                                          }
                                         },
                                         icon: const Icon(Icons.person_add, color: Colors.white),
                                         label: const Text('Invite to Apply'),
@@ -1680,19 +1722,20 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
                           ),
                         ),
                         
-                      // Only show Select Applicant button if not rejected and not in interview or hired status
-                      if (_currentStatus != 'REJECTED' && _currentStatus != 'INTERVIEW' && _currentStatus != 'HIRED')
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            // Disable button if loading, already selected, or if isSelectedApplicant flag is true
-                            onPressed: _isLoading || _isApplicantSelected || _isSelectedApplicant ? null : () => _fetchJobNextStepAndProcess(true),
-                            icon: const Icon(Icons.check_circle, color: Colors.white),
-                            label: Text(_currentStatus == 'HIRED' || _currentStatus == 'INTERVIEW' || _isSelectedApplicant
-                              ? 'Selected' 
-                              : 'Select Applicant'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepPurple,
+                      // Only show Select Applicant and Reject buttons if applicationId is not null
+                      if (applicationId != null) ...[
+                        if (_currentStatus != 'REJECTED' && _currentStatus != 'INTERVIEW' && _currentStatus != 'HIRED')
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              // Disable button if loading, already selected, or if isSelectedApplicant flag is true
+                              onPressed: _isLoading || _isApplicantSelected || _isSelectedApplicant ? null : () => _fetchJobNextStepAndProcess(true),
+                              icon: const Icon(Icons.check_circle, color: Colors.white),
+                              label: Text(_currentStatus == 'HIRED' || _currentStatus == 'INTERVIEW' || _isSelectedApplicant
+                                ? 'Selected' 
+                                : 'Select Applicant'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepPurple,
                               foregroundColor: Colors.white,
                               disabledBackgroundColor: Colors.deepPurple.withAlpha(128),
                               disabledForegroundColor: Colors.white70,
@@ -1723,7 +1766,7 @@ class _ApplicantDetailsScreenState extends State<ApplicantDetailsScreen> {
                           ),
                         ),
                     ],
-                  ),
+                ]),
                 ],
               ),
           ],

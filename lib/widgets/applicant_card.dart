@@ -7,9 +7,13 @@ class ApplicantCard extends StatelessWidget {
   final dynamic education;
   final double rating;
   final VoidCallback? onTap;
+  final VoidCallback? onInvite;
   final String? status;
   final bool? isSelected;
   final bool? applicantApproved;
+  final bool? hasApplied;
+  final String? applicationStatus;
+  final int? applicationId;
 
   const ApplicantCard({
     super.key,
@@ -18,9 +22,13 @@ class ApplicantCard extends StatelessWidget {
     required this.education,
     required this.rating,
     this.onTap,
+    this.onInvite,
     this.status,
     this.isSelected,
     this.applicantApproved,
+    this.hasApplied,
+    this.applicationStatus,
+    this.applicationId,
   });
   
   /// Formats education data into a readable string
@@ -58,6 +66,9 @@ class ApplicantCard extends StatelessWidget {
   
   // Get status text based on application status and selection state
   String _getStatusText() {
+    if (hasApplied == false) {
+      return 'Not Applied';
+    }
     if (status == 'rejected') {
       return 'Rejected';
     } else if (status == 'selected' || isSelected == true) {
@@ -353,8 +364,8 @@ class ApplicantCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // Status indicator if available
-              if (status != null || isSelected == true) ...[  
+              // Status indicator and action buttons for recommended candidates
+              if ((status != null || isSelected == true) || hasApplied != null) ...[  
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -380,6 +391,64 @@ class ApplicantCard extends StatelessWidget {
                           ],
                         ),
                       ),
+                    // Action buttons for recommended tab
+                    if ((hasApplied == false || applicationStatus == 'INVITED' || applicationStatus == 'PENDING') && onInvite != null)
+                      ElevatedButton.icon(
+                        onPressed: onInvite,
+                        icon: const Icon(Icons.person_add, size: 16),
+                        label: const Text('Invite to Apply'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      )
+                    else if (applicationStatus == 'INTERVIEW')
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: onTap,
+                            icon: const Icon(Icons.check, size: 16),
+                            label: const Text('Select'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: onTap,
+                            icon: const Icon(Icons.close, size: 16),
+                            label: const Text('Reject'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      if (applicationStatus == 'HIRED' || applicationStatus == 'REJECTED')
+                        TextButton.icon(
+                          onPressed: null,
+                          icon: const Icon(Icons.lock_outline, size: 16),
+                          label: Text(
+                            applicationStatus == 'HIRED'
+                                ? 'Hired'
+                                : 'Rejected',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.grey,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
                     // View profile button
                     TextButton.icon(
                       onPressed: onTap,
@@ -393,8 +462,7 @@ class ApplicantCard extends StatelessWidget {
                     ),
                   ],
                 ),
-              ] else ...[  // Fixed: Changed [] to ...[] for proper spread operator syntax
-                // View profile button only if no status
+              ] else ...[  // View profile button only if no status
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
